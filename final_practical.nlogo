@@ -17,6 +17,10 @@ patches-own [
 
 to setup
   clear-all
+  create-turtles 275 [setxy random-xcor random-ycor]
+  ask turtles [set shape "person"]
+  ask turtles [set size 12]
+  reset-ticks
   setupMap
   loadData
 end
@@ -24,7 +28,6 @@ end
 to go
   tick ; next time step
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 224
