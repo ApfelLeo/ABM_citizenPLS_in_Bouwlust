@@ -1,7 +1,9 @@
 # ABM_citizenPLS_in_Bouwlust
 
 This is part of the course SEN1211 at TUDelft.
+
 1.1 Context
+
 The case is situated in the City of The Hague. This city is one of the most fragmented and diverse cities
 in The Netherlands. This means that people from many different backgrounds are living together and in
 some neighbourhoods this could complicate the management of liveability and safety problems.
