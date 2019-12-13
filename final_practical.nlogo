@@ -1,6 +1,13 @@
 __includes [ "utilities.nls" ] ; all the boring but important stuff not related to content
 extensions [ csv ]
 
+; individual breeds for the three worker types + problem youth and the citizens. Garbage is also an agent?? (could also be a patch-agent)
+breed [garbagecollectors garbagecollector]
+breed [communityworkers communityworker]
+breed [policeofficers policeofficer]
+breed [problemyouth problemyoungster]
+breed [citizens citizen]
+breed [garbage a-garbage]
 
 globals [
   ; variables for the map
@@ -8,18 +15,49 @@ globals [
   toplefty
   bottomrightx
   bottomrighty
+  ; variables for agents
+
 ]
 
 patches-own [
   location ; the string holding the name of this location, default is 0
   category ; string holding the category of the location, default is 0
+  pls-value ; integer of pls bonus upon visit by agent, default is 0
+]
+
+garbagecollectors-own [
+  home-xcor ; the x coordinate of the homelocation, default is 0
+  home-ycor ; the y coordinate of the homelocation, default is 0
+  religion ; boolean if is religious or not
+  children ; number of children
+]
+citizens-own [
+  pls-individual ; every agent's individual PLS value, default is 50/100
+  home-xcor ; the x coordinate of the homelocation, default is 0
+  home-ycor ; the y coordinate of the homelocation, default is 0
+]
+
+garbage-own [
 ]
 
 to setup
   clear-all
-  create-turtles 275 [setxy random-xcor random-ycor]
-  ask turtles [set shape "person"]
-  ask turtles [set size 12]
+  create-garbagecollectors 4 [setxy random-xcor random-ycor]
+  ask garbagecollectors [set shape "person"
+    set size 12
+    set color red
+    set home-xcor xcor
+    set home-ycor ycor
+    set religion random 2
+    set children random-poisson 1.2 ; proability of 37% still missing!!!!
+  ]
+  create-citizens 275 [setxy random-xcor random-ycor]
+  ask citizens [set shape "person"
+      set size 12
+      set color grey
+      set home-xcor xcor
+      set home-ycor ycor
+    ]
   reset-ticks
   setupMap
   loadData
