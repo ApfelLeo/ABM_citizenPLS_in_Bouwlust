@@ -1,0 +1,126 @@
+;=======================
+; Convenience functions
+;=======================
+
+;Sort a list of lists, on an element of a sublist
+to-report sort-with [ key lst ]
+  report sort-by [ [a b] -> (runresult key a) < (runresult key b) ] lst
+end
+
+
+; Warnings can not be supressed, and are presented in the output window.
+; Useful for things the use must know, such as conditions that should never occur, etc.
+to warning [string]
+  output-print "=================================="
+  output-print word "Warning ! " string
+  output-print "=================================="
+end
+
+; When running in verbose mode, output is generated in the output window, for nonesential information for the user
+; Useful for tracking what the model is doing, can be turned on/off
+to say [string]
+  if verbose? [
+    output-print string
+  ]
+end
+
+;debug is presented in the command output and is used for debug information, prints to the console
+;Messages that are only useful when fixing bugs
+to debug [string]
+  if debug? [
+    print string
+  ]
+end
+
+;This procedure loads the location data from a csv file
+to loadData
+ 
+  file-close-all ; close all open files
+    
+  if not file-exists? "data/coordinates.csv" [
+    error "No 'data/coordinates.csv' file found!"
+  ]
+  let fileHeader 1 ; there is 1 header line, line 1 is the first data line (dont forget, we cunt from 0)
+  
+  file-open "data/coordinates.csv"
+    
+  ; need to skip the first fileHeader rows
+  let row 0 ; the row that is currently read
+  ; We'll read all the data in a single loop
+  while [ not file-at-end? ] [
+    ; here the CSV extension grabs a single line and puts the read data in a list
+    let data (csv:from-row  file-read-line)
+    
+    ; check if the row is empty or not
+    if fileHeader <= row  [ ; we are past the header
+      let location_string item 0 data
+      let xcoordinate convertxcor item 1 data
+      let ycoordinate convertycor item 2 data 
+      let category_string item 3 data
+      
+      let patchToMake patch  xcoordinate ycoordinate 
+      ifelse patchToMake != nobody [
+        ask patchToMake [
+          set pcolor black
+          set location location_string
+          set category category_string
+          ask patches in-radius 1 ; we make the surrounding patches black, for easier visual identification
+          [set pcolor black]
+        ]
+      ]
+      [warning sentence location_string "has incorrect coordinates"]
+      
+    ];end past header
+    
+    set row row + 1 ; increment the row counter for the header skip
+    
+  ]; end of while there are rows
+  
+  file-close ; make sure to close the file
+end
+
+
+
+to setupMap
+;Left upper corner from OSM map
+;52.05044/4.24542
+;Right lower corner	
+;4.27937/52.0300
+
+  set topleftx 4.24542
+  set toplefty 52.05044
+  
+  set bottomrightx 4.27937 
+  set bottomrighty 52.0300
+  
+  import-pcolors "data/map_bouwlust.png" ; we map the image 1:1 on the world Image is 815x785 pixelsm, that is exactly the size of the world.
+  
+end
+
+
+
+;procedures for converting the lat/long to patch coordinates
+;It only works within decimal lat/long, not aware of degree math
+to-report convertxcor [x]
+  ifelse is-number? x  
+  [
+    let lengthx bottomrightx - topleftx ; length of the map in coordinate units
+    let deltax x - topleftx  ; xdistance from edge on the x, in cordinate units
+    report max-pxcor * (deltax / lengthx)
+  ]
+  [
+    ;debug (word name " has a a non-number x coordinate: x coordinate set to 100")
+    report 100]
+end
+
+to-report convertycor [y]
+  ifelse is-number? y [
+    let lengthy toplefty - bottomrighty
+    let deltay y - bottomrighty
+    report max-pycor * (deltay / lengthy)
+  ]
+  [
+    ;debug (word name " has a a non-number y coordinate: y coordinate set to 100")
+    report 100
+  ]
+end
