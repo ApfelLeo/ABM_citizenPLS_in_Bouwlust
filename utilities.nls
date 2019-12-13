@@ -64,6 +64,7 @@ to loadData
           set pcolor black
           set location location_string
           set category category_string
+          set pls-value random 3
           ask patches in-radius 1 ; we make the surrounding patches black, for easier visual identification
           [set pcolor black]
         ]
