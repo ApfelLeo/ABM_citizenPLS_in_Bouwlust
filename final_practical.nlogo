@@ -15,48 +15,138 @@ globals [
   toplefty
   bottomrightx
   bottomrighty
+  schoollist
+  communitycenterlist
+  policestationlist
+  religioncenterlist
+  ; variables for the model
+  ;; time management and event times
+  timenow ; hh:mm, reset after 23:50 -> 00:00
+  minutenow ; minute counter, reset at 60
+  hournow ; hour counter, reset at 24
+  daynow ; day of the week, reset after 7 days
+  weeknow ; week of the year, reset after 52 weeks
+  yearnow ; end at year 4
+  workday ; day 1 to 5 of the week
+  schoolday ; == workday, day 1 to 5 of the week
+  ;;;; time tick = 10min
+  ;;;; day-cylce = 144 ticks
+  ;;;; wakeuptime at 0600 = 36 ticks
+  ;;;; starttime at 0800 = 48 ticks
+  ;;;; schoolendtime = 1600 = 96 ticks
+  ;;;; endtime at 1800 = 108 ticks
+  ;; PLS global counter
+  pls-global ; max 100
+  ;; event factors
+  garbagefactor
+  burglaryfactor
+  ;; state finances
+  treasury ; 100-#police*10-#communityworker*5-#garbagecollector*4-#initiatives*2 , limit 0
   ; variables for agents
 
 ]
 
 patches-own [
-  location ; the string holding the name of this location, default is 0
-  category ; string holding the category of the location, default is 0
-  pls-value ; integer of pls bonus upon visit by agent, default is 0
+  plocation ; the string holding the name of this location, default is 0
+  pcategory ; string holding the category of the location, default is 0
+  ppls-value ; integer of pls bonus upon visit by agent, default is 0
 ]
 
 garbagecollectors-own [
-  home-xcor ; the x coordinate of the homelocation, default is 0
-  home-ycor ; the y coordinate of the homelocation, default is 0
-  religion ; boolean if is religious or not
-  children ; number of children
+  homelocation ; the home patch
+  targetlocation ; assigns target location from schedule
+  children ; number of children ; 37% have children
+  school-name ; school name
+  hasreligion ; boolean if is religious or not ; proability of 50%
+  religioncenter-name ; religion center name
+  collectgarbage ; algorithm to collect nearest garbage patches
+  schedule ; the agent's schedule list
 ]
 citizens-own [
   pls-individual ; every agent's individual PLS value, default is 50/100
-  home-xcor ; the x coordinate of the homelocation, default is 0
-  home-ycor ; the y coordinate of the homelocation, default is 0
+  homelocation ; the home patch
+  targetlocation ; assigns target location from schedule
+  children ; number of children ; 37% have children
+  school-name ; school name
+  hasreligion ; boolean if is religious or not ; proability of 50%
+  religioncenter-name ; religion center name
+  hasjob ; boolean if has a job ; proability of 60%
+  joblocation ; job location
+  hasinitiative ; boolean if takes part in initiatives ; proability of 12%
+  initiative-name ; name of initiative he participates in
 ]
 
 garbage-own [
+
 ]
+
+to move-to-world-edge ;; moves until reaches edge of world
+  loop [
+    if not can-move? 1 [stop]
+    fd 1
+    ]
+end
 
 to setup
   clear-all
-  create-garbagecollectors 4 [setxy random-xcor random-ycor]
-  ask garbagecollectors [set shape "person"
+
+  ;; TIMESETUP
+  set minutenow 0 ; minute counter, reset at 60
+  set hournow 0 ; hour counter, reset at 24
+  set daynow 1 ; day of the week, reset after 7 days
+  set weeknow 1 ; week of the year, reset after 52 weeks
+  set yearnow 1 ; end at year 4
+ ; set timenow [ yearnow weeknow daynow hournow minutenow ] ; hh:mm, reset after 23:50 -> 00:00
+
+  ;; GARBAGECOLLECTORS
+  create-garbagecollectors 4 [
+    setxy random-xcor random-ycor
+    set shape "person"
     set size 12
     set color red
-    set home-xcor xcor
-    set home-ycor ycor
-    set religion random 2
-    set children random-poisson 1.2 ; proability of 37% still missing!!!!
+    set homelocation patch-here ; records the home location of agent
+    ifelse random 100 < 38 ; 37% have children
+      [ set children random-poisson 1.2 ]
+      [ set children 0 ]
+    set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
+
+    ;; create individual schedule for agent based on children, religion, job, initiatives
+    set schedule ["collectgarbage" ]
+    ifelse hasreligion > 0
+      [set religioncenter-name 0 ; choose nearest religioncenter !
+      set schedule fput "gotoreligion" schedule] ; add religion center to schedule, first position
+      [set religioncenter-name 0]
+    ifelse children > 0
+      [ set school-name 0  ; choose nearest school !
+      set schedule fput "gotoschool" schedule ; add school to schedule, first position
+      set schedule lput "gotoschool" schedule ] ; add school to schedule, last position
+      [ set school-name 0]
+    set schedule lput "gohome" schedule ; schedule home location
   ]
-  create-citizens 275 [setxy random-xcor random-ycor]
-  ask citizens [set shape "person"
-      set size 12
-      set color grey
-      set home-xcor xcor
-      set home-ycor ycor
+
+  ;; POLICEOFFICERS
+
+  ;; COMMUNITYWORKERS
+
+  ;; CITIZENS
+  create-citizens 275 [
+    setxy random-xcor random-ycor
+    set shape "person"
+    set size 12
+    set color grey
+    set homelocation patch-here
+    set pls-individual 50 ; max 100
+
+    ifelse random 100 < 38 ; 37% have children
+      [ set children random-poisson 1.2 ]
+      [ set children 0 ]
+    ifelse random 100 < 61 ; 60% have job
+      [ set hasjob 1 ]
+      [ set hasjob 0 ]
+    ifelse random 100 < 13 ; 12% have initiative
+      [ set hasinitiative 1 ]
+      [ set hasinitiative 0 ]
+    set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
     ]
   reset-ticks
   setupMap
@@ -64,7 +154,50 @@ to setup
 end
 
 to go
+  ; AGENTS: set next task from schedule
+  ; set heading towards target
+  while [hournow > 7 and hournow < 18] [
+    ask garbagecollectors [
+      if children > 0[
+        face school-name ; identify school to go to
+        loop[ ; keep moving straight to school until...
+          if patch-here = (patch 344 527)[stop] ; until reached school, break loop
+          forward 10
+        ]
+      ]
+      if hasreligion > 0[
+        face religioncenter-name
+        ]
+      ]
+    ]
+
+  ; sprout-initiative 1 for creating 1 initiative at citizen location
+
+
+  ; GLOBAL: determine new investments --> needs discounting algorithm
+  ; execute actions
   tick ; next time step
+  ; advance time
+  ifelse minutenow = 50 [ ; minute counter, steps of 10, from 50 --> set 00
+    set hournow hournow + 1
+    set minutenow 0]
+    [ set minutenow minutenow + 10]
+  if hournow = 24 [
+    set daynow daynow + 1
+    set hournow 0]
+  if daynow = 8 [
+    set weeknow weeknow + 1
+    set daynow 1]
+  if weeknow = 53 [
+    set yearnow yearnow + 1
+    set weeknow 1]
+  if yearnow = 4 [
+    stop]
+  ifelse daynow < 6 [ ; day 1 to 5 of the week ==schoolday
+    set workday 1
+    set schoolday 1]
+    [set workday 0
+    set schoolday 0]
 end
 @#$#@#$#@
 GRAPHICS-WINDOW

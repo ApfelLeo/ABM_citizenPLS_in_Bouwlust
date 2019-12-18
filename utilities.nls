@@ -34,7 +34,8 @@ end
 
 ;This procedure loads the location data from a csv file
 to loadData
- 
+  set schoollist []
+  
   file-close-all ; close all open files
     
   if not file-exists? "data/coordinates.csv" [
@@ -62,11 +63,12 @@ to loadData
       ifelse patchToMake != nobody [
         ask patchToMake [
           set pcolor black
-          set location location_string
-          set category category_string
-          set pls-value random 3
+          set plocation location_string
+          set schoollist lput plocation schoollist
+          set pcategory category_string
+          set ppls-value random 3
           ask patches in-radius 1 ; we make the surrounding patches black, for easier visual identification
-          [set pcolor black]
+            [set pcolor black]
         ]
       ]
       [warning sentence location_string "has incorrect coordinates"]
