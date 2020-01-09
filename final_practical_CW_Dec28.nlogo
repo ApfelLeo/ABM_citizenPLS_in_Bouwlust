@@ -496,6 +496,14 @@ to go
     ]
   ]
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ;;;  GARBAGECOLLECTORS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+
+;;; ;;; END GARBAGECOLLECTORS
+
 timestep
   ; sprout-initiative 1 for creating 1 initiative at citizen location
 
@@ -526,7 +534,7 @@ to timestep
     set schoolday 1]
     [set workday 0
     set schoolday 0]
-    tick ; next time step
+  tick ; next time step
 end
 
 to move-turtles
