@@ -7,7 +7,6 @@ breed [communityworkers communityworker]
 breed [policeofficers policeofficer]
 breed [problemyouth problemyoungster]
 breed [citizens citizen]
-breed [garbage a-garbage]
 
 ; Sites as agents
 breed [comcentre a-comcentre]
@@ -16,6 +15,7 @@ breed [schools school]
 breed [religious a-religious]
 breed [jobs job]
 breed [supermarkets supermarket]
+breed [garbage a-garbage]
 
 globals [
   ; variables for the map
@@ -69,11 +69,15 @@ garbagecollectors-own [
   homelocation ; the home patch
   targetlocation ; assigns target location from schedule
   children ; number of children ; 37% have children
-  school-name ; school name
   hasreligion ; boolean if is religious or not ; proability of 50%
-  religioncenter-name ; religion center name
-  collectgarbage ; algorithm to collect nearest garbage patches
-  schedule ; the agent's schedule list
+  schedule_start ; the agent's schedule list at the begining of the day
+  schedule_end ; the agent's schedule list at the end of the day
+  target ; variable that operates on the list of schedule
+  target_garbage ; nearest garbage patch to collect
+  target_school ; variable that determines the nearest school
+  target_religious ; variable that determines the nearest religious building
+  target_supermarket ; variable that determines the nearest supermarket from home
+  schedule-counter ; variable for iterate on dayly schedule
 ]
 
 communityworkers-own [
@@ -116,7 +120,7 @@ citizens-own [
 ]
 
 garbage-own [
-
+  garbagelocation
 ]
 
 comcentre-own[
@@ -142,7 +146,7 @@ religious-own[
   religiouslocation
 ]
 
-to move-to-world-edge ;; moves until reaches edge of world
+to move-to-world-edge ;; moves until reaches edge of world ==> alternative for citizen going to job
   loop [
     if not can-move? 1 [stop]
     fd 1
@@ -238,30 +242,31 @@ to setup
   set yearnow 1 ; end at year 4
  ; set timenow [ yearnow weeknow daynow hournow minutenow ] ; hh:mm, reset after 23:50 -> 00:00
 
+  ;; GARBAGE
+  create-garbage 4 [
+    setxy random-xcor random-ycor
+    set shape "square"
+    set size 12
+    set color orange
+    set garbagelocation patch-here
+  ]
+
   ;; GARBAGECOLLECTORS
   create-garbagecollectors 4 [
     setxy random-xcor random-ycor
     set shape "person"
     set size 12
-    set color red
+    set color orange
     set homelocation patch-here ; records the home location of agent
-    ifelse random 100 < 38 ; 37% have children
-      [ set children random-poisson 1.2 ]
-      [ set children 0 ]
-    set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
-
-    ;; create individual schedule for agent based on children, religion, job, initiatives
-    set schedule ["collectgarbage" ]
-    ifelse hasreligion > 0
-      [set religioncenter-name 0 ; choose nearest religioncenter !
-      set schedule fput "gotoreligion" schedule] ; add religion center to schedule, first position
-      [set religioncenter-name 0]
-    ifelse children > 0
-      [ set school-name 0  ; choose nearest school !
-      set schedule fput "gotoschool" schedule ; add school to schedule, first position
-      set schedule lput "gotoschool" schedule ] ; add school to schedule, last position
-      [ set school-name 0]
-    set schedule lput "gohome" schedule ; schedule home location
+    if random 100 < 38 ; 37% have children
+      [ set children 1 + random-poisson 0.5
+        set target_school min-one-of schools [distance myself] ] ; choose nearest school !
+    if random 2 > 0 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
+      [set hasreligion 1
+      set target_religious min-one-of religious [distance myself]
+    ]
+    set target_supermarket min-one-of supermarkets [distance myself]
+    set target_garbage min-one-of garbage [distance myself]
   ]
 
   ;; POLICEOFFICERS
@@ -276,10 +281,8 @@ to setup
     set color blue
     set homelocation patch-here ; records the home location of agent
 
-    ifelse random 100 < 99 ; 37% have children
-      [ set children random-poisson 1.2
-       ]
-      [ set children 0 ]
+    if random 100 < 38 ; 37% have children
+      [ set children 1 + random-poisson 0.5 ]
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
     if children > 0 and hasreligion > 0 [print("Test")]
   ]
@@ -296,15 +299,12 @@ to setup
     set homelocation patch-here
     set pls-individual 50 ; max 100
 
-    ifelse random 100 < 38 ; 37% have children
-      [ set children random-poisson 1.2 ]
-      [ set children 0 ]
-    ifelse random 100 < 61 ; 60% have job
+    if random 100 < 38 ; 37% have children
+      [ set children 1 + random-poisson 0.5 ]
+    if random 100 < 61 ; 60% have job
       [ set hasjob 1]
-      [ set hasjob 0 ]
-    ifelse random 100 < 13 ; 12% have initiative
+    if random 100 < 13 ; 12% have initiative
       [ set hasinitiative 1 ]
-      [ set hasinitiative 0 ]
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
     ]
   ask citizens with [hasjob = 1][
@@ -322,23 +322,16 @@ to setup
 end
 
 to go
-  ; AGENTS: set next task from schedule
-  ; set heading towards target
-;  while [hournow > 7 and hournow < 18] [
-    ; ask garbagecollectors [
-;   if children > 0[
-;     face school-name ; identify school to go to
-;     loop[ ; keep moving straight to school until...
-;           if patch-here = (patch 344 527)[stop] ; until reached school, break loop
-;           forward 10
-;           ]
-;     ]
-;   if hasreligion > 0[
-;     face religioncenter-name
-;     ]
-;   ]
-;]
-;  timestep
+;;;;;;;;;;;;;;;;;;;;;;
+;;;;;; Create Garbage
+if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
+  spawn-random-garbage
+]
+
+;;;;;; End
+;;;;;;;;;;;;;;;;;;;;;;
+
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CITIZENS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -410,7 +403,6 @@ to go
       if hournow > endtime[
         move-turtles
         if distance target = 0 and target != homelocation [
-          wait 1
           set schedule-counter schedule-counter + 1
           set target item schedule-counter schedule_end
           face target
@@ -460,7 +452,6 @@ to go
       set target []
     ]
      if hournow >= starttime [
-
       if hournow = starttime and minutenow = 0[
         if target = [] [
           set target item schedule-counter schedule_start
@@ -486,7 +477,6 @@ to go
       if hournow > endtime[
         move-turtles
         if distance target = 0 and target != homelocation [
-          wait 1
           set schedule-counter schedule-counter + 1
           set target item schedule-counter schedule_end
           face target
@@ -499,19 +489,74 @@ to go
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  GARBAGECOLLECTORS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-
-;;; ;;; END GARBAGECOLLECTORS
+ask garbagecollectors [
+;;; on WORKDAYS
+  if workday = 1 and hournow + minutenow = 0[
+    set schedule_start []
+    set schedule_end []
+      if hasreligion > 0 and PBernoulli ( 1 / 7 ) [
+      set schedule_start fput target_religious schedule_start
+    ]
+    if children > 0 [
+      set schedule_start lput target_school schedule_start
+      set schedule_end fput target_school schedule_end
+    ]
+    set target_garbage min-one-of garbage [distance myself]
+    set schedule_start lput target_garbage schedule_start
+    set schedule_end lput homelocation schedule_end; schedule home
+    if schedule_start = [] [
+      set schedule_start lput target_garbage schedule_start
+    ]
+  ]
+;;; on WEEKENDS
+  if workday = 0 and hournow + minutenow = 0 [
+    set schedule_start []
+    set schedule_end []
+      if hasreligion > 0 and PBernoulli ( 1 / 7 ) [
+      set schedule_start fput target_religious schedule_start
+    ]
+    set schedule_start lput target_supermarket schedule_start ; add supermarket building to schedule, first position
+    set schedule_end lput homelocation schedule_end
+  ]
+]
+ask garbagecollectors [
+     if hournow = 0 [
+      set schedule-counter 0
+      set target []
+    ]
+     if hournow >= starttime [
+      if hournow = starttime and minutenow = 0[
+        if target = [] [set target item schedule-counter schedule_start]
+        face target]
+      if hournow < endtime[    ;; add --> while on "last" of "schedule_start", continue going to garbage
+        move-turtles
+        if distance target = 0 and (last schedule_start) != target[
+          set schedule-counter schedule-counter + 1
+          set target item schedule-counter schedule_start
+          face target]
+        if distance target = 0 and (last schedule_start) = target[
+          set target min-one-of garbage [distance myself]]
+          ]
+      if hournow = endtime and minutenow = 0 [
+        set schedule-counter 0
+        set target item schedule-counter schedule_end
+        face target]
+      if hournow > endtime[
+        move-turtles
+        if distance target = 0 and target != homelocation [
+          set schedule-counter schedule-counter + 1
+          set target item schedule-counter schedule_end
+          face target]
+      ]
+    ]
+  ]
+;;;;;; END GARBAGECOLLECTORS
 
 timestep
   ; sprout-initiative 1 for creating 1 initiative at citizen location
-
-  ;
 end
 
-  ; GLOBAL: determine new investments --> needs discounting algorithm
-  ; execute actions
+
 to timestep
   ; advance time
   ifelse minutenow > (60 - minute_step) [ ; minute counter, steps of 10, from 50 --> set 00
@@ -535,6 +580,16 @@ to timestep
     [set workday 0
     set schoolday 0]
   tick ; next time step
+end
+
+to spawn-random-garbage
+  create-garbage random-poisson 1 [
+    setxy random-xcor random-ycor
+    set shape "square"
+    set color orange
+    set size 12
+    set garbagelocation patch-here
+  ]
 end
 
 to move-turtles
