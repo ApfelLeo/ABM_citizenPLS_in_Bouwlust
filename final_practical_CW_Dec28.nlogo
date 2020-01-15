@@ -529,8 +529,12 @@ ask garbagecollectors [
         ask target_garbage [set color gres_col]
         set schedule_start lput target_garbage schedule_start
       ][set target_garbage one-of garbage with [color = g_col]
-        ask target_garbage [set color gres_col]
-        set schedule_start lput target_garbage schedule_start]
+        ifelse target_garbage != nobody [
+          ask target_garbage [set color gres_col]
+          set schedule_start lput target_garbage schedule_start]
+          [set target one-of one-of alternative_target_list  ; if last target reached but != garbage-breed and timenow <endtime: choose random target
+            set schedule_start lput target schedule_start]    ; add to schedule
+        ]
     ]
   ]
 ;;; on WEEKENDS
