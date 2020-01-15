@@ -689,9 +689,9 @@ ticks
 
 BUTTON
 2
-62
+103
 75
-95
+136
 NIL
 setup
 NIL
@@ -706,9 +706,9 @@ NIL
 
 BUTTON
 151
-62
+103
 214
-95
+136
 NIL
 go
 T
@@ -722,10 +722,10 @@ NIL
 1
 
 SWITCH
-12
-122
-133
-155
+4
+208
+125
+241
 verbose?
 verbose?
 0
@@ -733,10 +733,10 @@ verbose?
 -1000
 
 SWITCH
-12
-161
-122
-194
+4
+243
+114
+276
 debug?
 debug?
 0
@@ -752,9 +752,9 @@ OUTPUT
 
 MONITOR
 63
-10
+56
 132
-55
+101
 NIL
 hournow
 17
@@ -793,9 +793,9 @@ HORIZONTAL
 
 MONITOR
 133
-10
+56
 214
-55
+101
 NIL
 minutenow
 17
@@ -841,11 +841,33 @@ Number
 
 MONITOR
 2
-10
+56
 62
-55
+101
 NIL
 daynow
+17
+1
+11
+
+MONITOR
+2
+10
+67
+55
+NIL
+yearnow
+17
+1
+11
+
+MONITOR
+68
+10
+137
+55
+NIL
+weeknow
 17
 1
 11
