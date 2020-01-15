@@ -58,6 +58,8 @@ globals [
   starttime
   endtime
   alternative_target_list
+  g_col ; standard garbage color
+  gres_col ; garbage color when targeted by garbagecollector (reserved)
 ]
 
 patches-own [
@@ -165,6 +167,8 @@ to setup
   loadData
   set starttime 7
   set endtime 18
+  set g_col orange ; standard garbage color
+  set gres_col brown ; garbage color when targeted by garbagecollector (reserved)
   ;;;; CREATES locations as agents
 
   ;; Jobs on Edges
@@ -322,18 +326,7 @@ to setup
     ;watch-me
   ;]
 
-  set alternative_target_list []
-  set alternative_target_list lput n-of 5 schools alternative_target_list
-  set alternative_target_list lput n-of 5 religious alternative_target_list
- ; set alternative_target_list lput n-of 1 policestations alternative_target_list   <-- uncomment once implemented !
-  set alternative_target_list lput n-of 4 supermarkets alternative_target_list
- ; set alternative_target_list lput n-of 4 initiatives alternative_target_list    <-- initiatives change over time, so make it updated
-  set alternative_target_list lput n-of 1 comcentre alternative_target_list
-  set alternative_target_list lput n-of Lever_Citizens citizens alternative_target_list
- ; set alternative_target_list lput n-of 5 problemyouth alternative_target_list   <-- uncomment once implemented !
- ; set alternative_target_list lput n-of 1 policeofficers alternative_target_list   <-- uncomment once implemented !
-  set alternative_target_list lput n-of Lever_CommunityWorkers communityworkers alternative_target_list
-  set alternative_target_list lput n-of 4 garbagecollectors alternative_target_list
+  set alternative_target_list (list schools religious supermarkets comcentre citizens communityworkers garbagecollectors) ; policeofficers problemyouth initiatives policestations <-- uncomment once implemented !
 
     ;; TIMESETUP
   set minutenow 0 ; minute counter, reset at 60
@@ -531,7 +524,13 @@ ask garbagecollectors [
     ]
     set schedule_end lput homelocation schedule_end; schedule home
     if schedule_start = [] [
-      set schedule_start lput min-one-of garbage [distance myself] schedule_start
+      ifelse [color = g_col] of min-one-of garbage [distance myself] [
+        set target_garbage min-one-of garbage [distance myself]
+        ask target_garbage [set color gres_col]
+        set schedule_start lput target_garbage schedule_start
+      ][set target_garbage one-of garbage with [color = g_col]
+        ask target_garbage [set color gres_col]
+        set schedule_start lput target_garbage schedule_start]
     ]
   ]
 ;;; on WEEKENDS
@@ -561,24 +560,35 @@ ask garbagecollectors [
           set target item schedule-counter schedule_start
           face target]
         if distance target = 0 and (last schedule_start) = target[
-          ifelse [breed] of target = garbage [
-            if any? garbagecollectors with [target = target] [
-              ask garbagecollectors [
-                set target one-of garbage]
-              ]
-            ask target [die]
-            set target min-one-of garbage [distance myself]
-            set schedule_start lput target schedule_start
-            face target ]
-            [set target one-of turtles
-            set schedule_start lput target schedule_start
-            face target ]
+          ifelse [breed] of target = garbage [                 ; if last entry is garbage, eat garbage and remove from list
+            set schedule_start remove target schedule_start
+            set schedule-counter schedule-counter - 1          ; remove counter 1
+            ask target [die]                                   ; kill target garbage
+            ifelse min-one-of garbage [distance myself] = nobody [
+              set target one-of one-of alternative_target_list
+              set schedule_start lput target schedule_start][
+              ifelse [color = g_col] of min-one-of garbage [distance myself] [ ; need new target on schedule
+                set target_garbage min-one-of garbage [distance myself]        ; if closest garbage is free/orange, target this
+                ask target_garbage [set color gres_col]                        ; reservev garbage by setting color brown
+                set target target_garbage
+                set schedule_start lput target_garbage schedule_start          ; add target to schedule
+              ][set target_garbage one-of garbage with [color = g_col]         ; if closest garbage already taken, choose random with col=orange
+                ifelse target_garbage = nobody [                               ; if chosen turns out dead
+                  set target one-of one-of alternative_target_list             ; if new target is nobody and timenow <endtime: choose random target
+                  set schedule_start lput target schedule_start]               ; add new target to schedule
+                  [ask target_garbage [set color gres_col]                     ; else: chosen available, reserve/set col=brown
+                  set schedule_start lput target_garbage schedule_start        ; add to schedule
+                  set target target_garbage]] ] ]                              ; set target
+           [set target one-of one-of alternative_target_list  ; if last target reached but != garbage-breed and timenow <endtime: choose random target
+            set schedule_start lput target schedule_start]    ; add to schedule
+            face target
             ]
           ]
       ]
       if hournow = endtime and minutenow = 0 [
         set schedule-counter 0
         set target item schedule-counter schedule_end
+        ask garbage [set color g_col]
         face target]
       if hournow > endtime[
         move-turtles
@@ -637,14 +647,19 @@ to move-turtles
       fd citizen_speed ]
 end
 
+to random-walk
+  set heading random 360 ; alternative: try to set random coordinates as target
+  fd citizen_speed
+end
+
 to-report PBernoulli [ p ]
   report random-float 1 < p
 end
 @#$#@#$#@
 GRAPHICS-WINDOW
-224
+218
 10
-1047
+1041
 804
 -1
 -1
@@ -709,7 +724,7 @@ SWITCH
 155
 verbose?
 verbose?
-1
+0
 1
 -1000
 
@@ -766,7 +781,7 @@ minute_step
 minute_step
 0
 59
-7.0
+5.0
 0.5
 1
 NIL
