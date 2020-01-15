@@ -15,6 +15,7 @@ breed [schools school]
 breed [religious a-religious]
 breed [jobs job]
 breed [supermarkets supermarket]
+breed [policestations policestation]
 breed [garbage a-garbage]
 
 globals [
@@ -56,6 +57,7 @@ globals [
   community_y
   starttime
   endtime
+  alternative_target_list
 ]
 
 patches-own [
@@ -129,6 +131,10 @@ comcentre-own[
 
 jobs-own[
   jobslocation
+]
+
+policestations-own[
+  policestationslocation
 ]
 
 initiatives-own[
@@ -266,7 +272,6 @@ to setup
       set target_religious min-one-of religious [distance myself]
     ]
     set target_supermarket min-one-of supermarkets [distance myself]
-    set target_garbage min-one-of garbage [distance myself]
   ]
 
   ;; POLICEOFFICERS
@@ -316,6 +321,29 @@ to setup
   ;  set size 15
     ;watch-me
   ;]
+
+  set alternative_target_list []
+  set alternative_target_list lput n-of 5 schools alternative_target_list
+  set alternative_target_list lput n-of 5 religious alternative_target_list
+ ; set alternative_target_list lput n-of 1 policestations alternative_target_list   <-- uncomment once implemented !
+  set alternative_target_list lput n-of 4 supermarkets alternative_target_list
+ ; set alternative_target_list lput n-of 4 initiatives alternative_target_list    <-- initiatives change over time, so make it updated
+  set alternative_target_list lput n-of 1 comcentre alternative_target_list
+  set alternative_target_list lput n-of Lever_Citizens citizens alternative_target_list
+ ; set alternative_target_list lput n-of 5 problemyouth alternative_target_list   <-- uncomment once implemented !
+ ; set alternative_target_list lput n-of 1 policeofficers alternative_target_list   <-- uncomment once implemented !
+  set alternative_target_list lput n-of Lever_CommunityWorkers communityworkers alternative_target_list
+  set alternative_target_list lput n-of 4 garbagecollectors alternative_target_list
+
+    ;; TIMESETUP
+  set minutenow 0 ; minute counter, reset at 60
+  set hournow 0 ; hour counter, reset at 24
+  set daynow 1 ; day of the week, reset after 7 days
+  set weeknow 1 ; week of the year, reset after 52 weeks
+  set yearnow 1 ; end at year 4
+  set workday 1
+  set schoolday 1
+ ; set timenow [ yearnow weeknow daynow hournow minutenow ] ; hh:mm, reset after 23:50 -> 00:00
 
   reset-ticks
 
@@ -501,11 +529,9 @@ ask garbagecollectors [
       set schedule_start lput target_school schedule_start
       set schedule_end fput target_school schedule_end
     ]
-    set target_garbage min-one-of garbage [distance myself]
-    set schedule_start lput target_garbage schedule_start
     set schedule_end lput homelocation schedule_end; schedule home
     if schedule_start = [] [
-      set schedule_start lput target_garbage schedule_start
+      set schedule_start lput min-one-of garbage [distance myself] schedule_start
     ]
   ]
 ;;; on WEEKENDS
@@ -515,8 +541,8 @@ ask garbagecollectors [
       if hasreligion > 0 and PBernoulli ( 1 / 7 ) [
       set schedule_start fput target_religious schedule_start
     ]
-    set schedule_start lput target_supermarket schedule_start ; add supermarket building to schedule, first position
-    set schedule_end lput homelocation schedule_end
+    set schedule_start lput target_supermarket schedule_start ; add supermarket building to schedule, last position
+    set schedule_end lput homelocation schedule_end ; to return home at end of day
   ]
 ]
 ask garbagecollectors [
@@ -535,8 +561,21 @@ ask garbagecollectors [
           set target item schedule-counter schedule_start
           face target]
         if distance target = 0 and (last schedule_start) = target[
-          set target min-one-of garbage [distance myself]]
+          ifelse [breed] of target = garbage [
+            if any? garbagecollectors with [target = target] [
+              ask garbagecollectors [
+                set target one-of garbage]
+              ]
+            ask target [die]
+            set target min-one-of garbage [distance myself]
+            set schedule_start lput target schedule_start
+            face target ]
+            [set target one-of turtles
+            set schedule_start lput target schedule_start
+            face target ]
+            ]
           ]
+      ]
       if hournow = endtime and minutenow = 0 [
         set schedule-counter 0
         set target item schedule-counter schedule_end
@@ -548,7 +587,6 @@ ask garbagecollectors [
           set target item schedule-counter schedule_end
           face target]
       ]
-    ]
   ]
 ;;;;;; END GARBAGECOLLECTORS
 
@@ -595,13 +633,13 @@ end
 to move-turtles
        ifelse distance target < distance_target
       [ move-to target ]
-      [ fd citizen_speed ]
+      [ face target
+      fd citizen_speed ]
 end
 
 to-report PBernoulli [ p ]
   report random-float 1 < p
 end
-
 @#$#@#$#@
 GRAPHICS-WINDOW
 224
@@ -631,10 +669,10 @@ ticks
 30.0
 
 BUTTON
-143
-142
-216
-175
+2
+62
+75
+95
 NIL
 setup
 NIL
@@ -648,10 +686,10 @@ NIL
 1
 
 BUTTON
-140
-179
-203
-212
+151
+62
+214
+95
 NIL
 go
 T
@@ -694,10 +732,10 @@ OUTPUT
 12
 
 MONITOR
-30
-222
-99
-267
+63
+10
+132
+55
 NIL
 hournow
 17
@@ -735,10 +773,10 @@ NIL
 HORIZONTAL
 
 MONITOR
-120
-226
-201
-271
+133
+10
+214
+55
 NIL
 minutenow
 17
@@ -781,6 +819,17 @@ Lever_Citizens
 1
 0
 Number
+
+MONITOR
+2
+10
+62
+55
+NIL
+daynow
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
