@@ -14,19 +14,22 @@ neighbourhood.
 
 ## notes
 
-### 1. Done:
+### 1. Done
+
 - initial setup of map and locations
 - communityworkers (agent)
 - citizens (agent)
 - garbagecollectors (agent)
 - random garbage (agent)
 
-### 2. in Progress:
+### 2. in Progress
+
 - policeofficers (agent) -> V.
 - problemyouth (agent) -> F.
 - burglaries (agent) -> I.
 
-### 3. still to do:
+### 3. still to do
+
 - PLS logic and the change of model behaviour from it
 - spending mechanism/budget tracking
 - initiative viability mechanism --> initiatives die if not visited frequently
