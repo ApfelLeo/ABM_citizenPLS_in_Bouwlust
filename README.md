@@ -12,7 +12,22 @@ drug abuse, lonely elderly, litter and lack of community/social space. We use Bo
 bounded by the Meppelweg, Dedemvaartsweg, Erasmusweg and Lozrelaan, as a case study
 neighbourhood.
 
-## notes / to be done
+## notes
 
+### 1. Done:
+- initial setup of map and locations
+- communityworkers (agent)
+- citizens (agent)
+- garbagecollectors (agent)
+- random garbage (agent)
+
+### 2. in Progress:
+- policeofficers (agent)
+- problemyouth (agent)
+
+### 3. still to do:
+- burglaries
+- PLS logic and the change of model behaviour from it
+- spending mechanism/budget tracking
 - in "to go/CITIZENS": only citizens with [hasjob = 1] are given schedules, i.e. pick up children, go to religious center, etc...
 - check if logic can be simplified, i.e. combine similar if-statements
