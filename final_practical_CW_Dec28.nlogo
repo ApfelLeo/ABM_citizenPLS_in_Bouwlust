@@ -17,6 +17,7 @@ breed [jobs job]
 breed [supermarkets supermarket]
 breed [policestations policestation]
 breed [garbage a-garbage]
+breed [burglaries burglary]
 
 globals [
   ; variables for the map
@@ -38,28 +39,39 @@ globals [
   yearnow ; end at year 4
   workday ; day 1 to 5 of the week
   schoolday ; == workday, day 1 to 5 of the week
+  starttime ; starttime of working-/schoolday at 0800 = 48 ticks
+  endtime ; endtime of working-/schoolday at 1800 = 108 ticks
   ;;;; time tick = 10min
   ;;;; day-cylce = 144 ticks
-  ;;;; wakeuptime at 0600 = 36 ticks
-  ;;;; starttime at 0800 = 48 ticks
-  ;;;; schoolendtime = 1600 = 96 ticks
-  ;;;; endtime at 1800 = 108 ticks
   ;; PLS global counter
-  pls-global ; max 100
+  pls_global ; max 100
+  pls_pos_small
+  pls_pos_medium
+  pls_pos_high
+  pls_neg_small
+  pls_neg_medium
+  pls_neg_high
+  initiative_pressure
+
   ;; event factors
+  garbageprobability
   garbagefactor
+  burglaryprobability
   burglaryfactor
+
   ;; state finances
   treasury ; 100-#police*10-#communityworker*5-#garbagecollector*4-#initiatives*2 , limit 0
+
   ; variables for agents
   ;; location community centre
   community_x
   community_y
-  starttime
-  endtime
+  ;; garbagecollectors and garbage
   alternative_target_list
   g_col ; standard garbage color
   gres_col ; garbage color when targeted by garbagecollector (reserved)
+
+
 ]
 
 patches-own [
@@ -101,7 +113,7 @@ communityworkers-own [
 ]
 
 citizens-own [
-  pls-individual ; every agent's individual PLS value, default is 50/100
+  pls_individual ; every agent's individual PLS value, default is 50/100
   homelocation ; the home patch
   targetlocation ; assigns target location from schedule
   children ; number of children ; 37% have children
@@ -121,6 +133,9 @@ citizens-own [
   target_religious ; variable that determines the nearest religious building from home
   target_initiative ; variable that determines the nearest initiative from home
   schedule-counter ; variable for iterate on dayly schedule
+  burglary_recent ; indicator if burglary recently occurred to citizen
+  burglary_date ; indicates when burglary occurred to citizen
+  urge_to_start_initiative ; indicates urge to start an initiative
 ]
 
 garbage-own [
@@ -141,6 +156,7 @@ policestations-own[
 
 initiatives-own[
   initiativeslocation
+  viability
 ]
 
 schools-own[
@@ -150,10 +166,15 @@ schools-own[
 supermarkets-own[
   supermarketlocation
 ]
+
 religious-own[
   religiouslocation
 ]
 
+burglaries-own[
+  burglarylocation
+  burglary_date
+]
 to move-to-world-edge ;; moves until reaches edge of world ==> alternative for citizen going to job
   loop [
     if not can-move? 1 [stop]
@@ -293,7 +314,6 @@ to setup
     if random 100 < 38 ; 37% have children
       [ set children 1 + random-poisson 0.5 ]
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
-    if children > 0 and hasreligion > 0 [print("Test")]
   ]
     ;; create individual schedule for agent based on children, religion, job, initiatives
 
@@ -306,7 +326,7 @@ to setup
     set size 12
     set color grey
     set homelocation patch-here
-    set pls-individual 50 ; max 100
+    set pls_individual 50 ; max 100
 
     if random 100 < 38 ; 37% have children
       [ set children 1 + random-poisson 0.5 ]
@@ -338,20 +358,42 @@ to setup
   set schoolday 1
  ; set timenow [ yearnow weeknow daynow hournow minutenow ] ; hh:mm, reset after 23:50 -> 00:00
 
+    ;; PLS_SETUP
+  set pls_global (sum [pls_individual] of citizens) / count citizens
+  set pls_pos_small random 2
+  set pls_pos_medium (5 - random 3)
+  set pls_pos_high (8 - random 3)
+  set pls_neg_small random -3
+  set pls_neg_medium (-5 + random 2)
+  set pls_neg_high 10
+
+  set garbageprobability 1  ; set the standard probability of garbage appearing
+  set burglaryprobability 1 ; set the standard probability of burglary occuring
+
   reset-ticks
 
 end
 
 to go
+
+;;;;;;;;;;;;;;;;;;;;;;
+;;;;;; PLS-RELATED EVENTS
+
+set pls_global (sum [pls_individual] of citizens) / count citizens ; re-evaluates global PLS rating every
+
+ ; garbagefactor ((1 - pls_global / 100) * garbageprobability) ; evaluate the actual garbagefactor in dependence of global pls-value
+ ; burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate the actual burglaryfactor in dependence of global pls-value
+;;;;;; END PLS
+;;;;;;;;;;;;;;;;;;;;;;
+
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; Create Garbage
 if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
   spawn-random-garbage
 ]
 
-;;;;;; End
+;;;;;; End GARBAGE
 ;;;;;;;;;;;;;;;;;;;;;;
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CITIZENS
@@ -431,6 +473,10 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
         ]
       ]
     ]
+    ;; --> add: 
+    ;; --> pls_individual update by encounters and burglaries
+    ;; --> related: "ask garbagecollector 37 [ ask patches in-radius 10 [set pcolor red]]"
+    ;; --> depending on PLS, citizens start an initiative at citizen location
   ]
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  COMMUNITY WORKERS
@@ -457,12 +503,9 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
       ]
 
     ]
-   print(word daynow "-" hournow)
    ask communityworkers [
     show schedule_start
-    print("to")
     show schedule_end
-    print("---")
    ]
   ]
 
@@ -605,7 +648,7 @@ ask garbagecollectors [
 ;;;;;; END GARBAGECOLLECTORS
 
 timestep
-  ; sprout-initiative 1 for creating 1 initiative at citizen location
+
 end
 
 
@@ -777,10 +820,10 @@ NIL
 HORIZONTAL
 
 SLIDER
-13
-332
-185
-365
+4
+313
+176
+346
 minute_step
 minute_step
 0
@@ -803,10 +846,10 @@ minutenow
 11
 
 SLIDER
-18
-380
-190
-413
+4
+348
+176
+381
 distance_target
 distance_target
 0
@@ -818,10 +861,10 @@ NIL
 HORIZONTAL
 
 INPUTBOX
-17
-437
-157
-497
+3
+481
+143
+541
 Lever_CommunityWorkers
 5.0
 1
@@ -829,10 +872,10 @@ Lever_CommunityWorkers
 Number
 
 INPUTBOX
-21
-515
-170
-575
+3
+543
+152
+603
 Lever_Citizens
 10.0
 1
@@ -868,6 +911,17 @@ MONITOR
 55
 NIL
 weeknow
+17
+1
+11
+
+MONITOR
+2
+139
+79
+184
+NIL
+pls_global
 17
 1
 11
