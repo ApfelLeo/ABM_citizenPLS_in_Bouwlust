@@ -22,12 +22,13 @@ neighbourhood.
 - random garbage (agent)
 
 ### 2. in Progress:
-- policeofficers (agent)
-- problemyouth (agent)
+- policeofficers (agent) -> V.
+- problemyouth (agent) -> F.
+- burglaries (agent) -> I.
 
 ### 3. still to do:
-- burglaries
 - PLS logic and the change of model behaviour from it
 - spending mechanism/budget tracking
+- initiative viability mechanism --> initiatives die if not visited frequently
 - in "to go/CITIZENS": only citizens with [hasjob = 1] are given schedules, i.e. pick up children, go to religious center, etc...
 - check if logic can be simplified, i.e. combine similar if-statements
