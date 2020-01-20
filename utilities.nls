@@ -48,6 +48,7 @@ to loadData
   ; need to skip the first fileHeader rows
   let row 0 ; the row that is currently read
   ; We'll read all the data in a single loop
+  ;print "Start at"
   while [ not file-at-end? ] [
     ; here the CSV extension grabs a single line and puts the read data in a list
     let data (csv:from-row  file-read-line)
@@ -57,17 +58,29 @@ to loadData
       let location_string item 0 data
       let xcoordinate convertxcor item 1 data
       let ycoordinate convertycor item 2 data 
-      let category_string item 3 data
+      let category_string item 3 data      
       
       let patchToMake patch  xcoordinate ycoordinate 
       ifelse patchToMake != nobody [
-        ask patchToMake [
-          set pcolor black
+        ask patchToMake [ 
+          ;ask patches [set pcolor pcolorPatch]
+          ;print pcolorPatch 
+          set pcolor pcolorPatch
           set plocation location_string
           set schoollist lput plocation schoollist
           set pcategory category_string
+          set plabel pcategory 
+          set plabel-color black 
+          if pcategory = "community centre" [
+            set community_x xcoordinate
+            set community_y ycoordinate
+          ] 
+          if pcategory = "police station" [
+            set polstation_x xcoordinate
+            set polstation_y ycoordinate
+          ]
           set ppls-value random 3
-          ask patches in-radius 1 ; we make the surrounding patches black, for easier visual identification
+          ask patches in-radius 3 ; we make the surrounding patches black, for easier visual identification
             [set pcolor black]
         ]
       ]
