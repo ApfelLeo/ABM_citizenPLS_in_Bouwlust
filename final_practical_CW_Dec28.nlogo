@@ -889,7 +889,7 @@ to timestep
 end
 
 to spawn-random-garbage
-  let new_garbage_amount round (abs (random-normal 1 (1 / garbageprobability))  ; the garbageprobability-factor determines the standard deviation (SD)
+  let new_garbage_amount round (abs (random-normal 1 (1 / garbageprobability)))  ; the garbageprobability-factor determines the standard deviation (SD)
                                 ; of garbage creation. if pls is high (ex.90) -> factor is low (0.1), thus the SD is low SD: 1.
                                 ; with a random-normal distribution with mean=1, this results in garbage production of 0 and 2 at high pls
                                 ; and between 0 and 11 at low pls.
