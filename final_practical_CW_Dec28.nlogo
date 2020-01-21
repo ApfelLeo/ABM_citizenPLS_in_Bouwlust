@@ -56,6 +56,7 @@ globals [
   ;; event factors
   garbageprobability
   garbagefactor
+  garbage_cap
   burglaryprobability
   burglaryfactor
 
@@ -432,6 +433,8 @@ to setup
   set pls_neg_high 10
 
   set garbageprobability 1  ; set the standard probability of garbage appearing
+  set garbage_cap 20 ; caps the max amount of garbage created per instant. per defined formula, max possible amount is 11.
+                    ; probably a cap around 5 is recommended
   set burglaryprobability 1 ; set the standard probability of burglary occuring
 
   reset-ticks
@@ -445,8 +448,8 @@ to go
 
 set pls_global (sum [pls_individual] of citizens) / count citizens ; re-evaluates global PLS rating every
 
- ; garbagefactor ((1 - pls_global / 100) * garbageprobability) ; evaluate the actual garbagefactor in dependence of global pls-value
- ; burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate the actual burglaryfactor in dependence of global pls-value
+set garbagefactor ((1 - pls_global / 100) * garbageprobability) ; evaluate garbagefactor in dependence of global pls-value. high pls -> low factor
+ ; burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate burglaryfactor in dependence of global pls-value. high pls -> low factor
 ;;;;;; END PLS
 ;;;;;;;;;;;;;;;;;;;;;;
 
@@ -542,6 +545,7 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
     ;; --> related: "ask garbagecollector 37 [ ask patches in-radius 10 [set pcolor red]]"
     ;; --> depending on PLS, citizens start an initiative at citizen location
   ]
+
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  COMMUNITY WORKERS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -803,7 +807,7 @@ if hournow = endtime [
   ]
 
 if hournow > starttime and hournow < endtime and (hournow mod 3 = 0) and minutenow = 0 [ ; every three hours the problem youth generates litter
-  spawn-probYouth-garbage ;; only creates garbage with problemyouth = 2
+  spawn-probyouth-garbage ;; only creates garbage with problemyouth = 2
 ]
 
 
@@ -885,7 +889,14 @@ to timestep
 end
 
 to spawn-random-garbage
-  create-garbage random-poisson 1 [
+  let new_garbage_amount round (abs (random-normal 1 (1 / garbageprobability))  ; the garbageprobability-factor determines the standard deviation (SD)
+                                ; of garbage creation. if pls is high (ex.90) -> factor is low (0.1), thus the SD is low SD: 1.
+                                ; with a random-normal distribution with mean=1, this results in garbage production of 0 and 2 at high pls
+                                ; and between 0 and 11 at low pls.
+  if new_garbage_amount > garbage_cap [
+    set new_garbage_amount garbage_cap
+  ]
+  create-garbage new_garbage_amount [
     setxy random-xcor random-ycor
     set shape "square"
     set color orange
@@ -894,7 +905,7 @@ to spawn-random-garbage
   ]
 end
 
-to spawn-probYouth-garbage
+to spawn-probyouth-garbage
   ask patches with [problemyouth_2 = 2][
     sprout-garbage 1[
     set shape "square"
@@ -904,7 +915,6 @@ to spawn-probYouth-garbage
     ]
   ]
 end
-
 
 to move-turtles
        ifelse distance target < distance_target
