@@ -5,7 +5,7 @@ extensions [ csv ]
 breed [garbagecollectors garbagecollector]
 breed [communityworkers communityworker]
 breed [policeofficers policeofficer]
-breed [problemyouth problemyoungster]
+breed [problemyouth problemyoungster]           ;; --> more initiatives reduces creation-factor of problemyouth !!
 breed [citizens citizen]
 
 ; Sites as agents
@@ -74,8 +74,6 @@ globals [
   alternative_target_list
   g_col ; standard garbage color
   gres_col ; garbage color when targeted by garbagecollector (reserved)
-
-
 ]
 
 patches-own [
@@ -100,6 +98,7 @@ garbagecollectors-own [
   target_religious ; variable that determines the nearest religious building
   target_supermarket ; variable that determines the nearest supermarket from home
   schedule-counter ; variable for iterate on dayly schedule
+  pls_value
 ]
 
 communityworkers-own [
@@ -116,10 +115,12 @@ communityworkers-own [
   target_school ; variable that determines the nearest school
   target_religious ; variable that determines the nearest religious building
   schedule-counter ; variable for iterate on dayly schedule
+  pls_value
 ]
 
 citizens-own [
   pls_individual ; every agent's individual PLS value, default is 50/100
+  turtles_in_range ; recognizes other turtles in range to help setting pls_individual values
   homelocation ; the home patch
   targetlocation ; assigns target location from schedule
   children ; number of children ; 37% have children
@@ -139,10 +140,12 @@ citizens-own [
   burglary_recent ; indicator if burglary recently occurred to citizen
   burglary_date ; indicates when burglary occurred to citizen
   urge_to_start_initiative ; indicates urge to start an initiative
+  pls_value
 ]
 
 garbage-own [
   garbagelocation
+  pls_value
 ]
 
 policeofficers-own [
@@ -159,54 +162,59 @@ policeofficers-own [
   target_school ; variable that determines the nearest school
   target_religious ; variable that determines the nearest religious building
   schedule-counter
+  pls_value
 ]
 
 comcentre-own[
   comcentrelocation
+  pls_value
 ]
 
 jobs-own[
   jobslocation
+  pls_value
 ]
 
 policestations-own[
   policestationslocation
+  pls_value
 ]
 
 initiatives-own[
   initiativeslocation
   viability
+  pls_value
 ]
 
 schools-own[
   schoolslocation
   problemyouth_1 ;; For problem youth
+  pls_value
 ]
 
 supermarkets-own[
   supermarketlocation
   problemyouth_1 ;; For problem youth
+  pls_value
 ]
 
 religious-own[
   religiouslocation
+  pls_value
 ]
 
 burglaries-own[
   burglarylocation
   burglary_date
+  pls_value
 ]
 
-problemyouth-own[
+problemyouth-own[                                     ;; --> more initiatives reduces creation-factor of problemyouth !!
   problemyouthlocation
+  pls_value
 ]
 
-to move-to-world-edge ;; moves until reaches edge of world ==> alternative for citizen going to job
-  loop [
-    if not can-move? 1 [stop]
-    fd 1
-    ]
-end
+
 
 to setup
   clear-all
@@ -216,9 +224,11 @@ to setup
   set endtime 18
   set g_col orange ; standard garbage color
   set gres_col brown ; garbage color when targeted by garbagecollector (reserved)
-  ;;;; CREATES locations as agents
+  set alternative_target_list (list schools 
+  religious supermarkets comcentre citizens communityworkers garbagecollectors
+  initiatives) ; policeofficers policestations) ;  problemyouth <-- uncomment once implemented !
 
-  ;; Jobs on Edges
+  ;;;;;; CREATE JOBLOCATIONS
   let coords [[0 0] [0 784] [814 784] [814 0]]
   foreach coords [
     c  ->
@@ -228,14 +238,10 @@ to setup
       set color magenta
       set size 12
       set jobslocation patch-here
+      set pls_value pls_effect "pos" "zerotomedium" ; shall joblocations have effect on PLS ???
     ]
   ]
-
-
-
-  ;; Community centre
-  ;set-default-shape innitiatives "house"
-  ;ask n-of 1 (patches with [pcategory = "community centre"])[sprout-innitiatives 1 [set color red]]
+  ;;;;; CREATE COMMUNITYCENTERS
   ;;; Create community centre with coordinates read in the utilities.nls file
   create-comcentre 1 [
     setxy community_x community_y
@@ -243,8 +249,9 @@ to setup
     set color green
     set size 12
     set comcentrelocation patch-here
+    set pls_value pls_effect "pos" "zerotomedium"
   ]
-  ;; Neighbourhood innitiatives
+  ;;;;; CREATE INITIATIVES
   ;;; Create innitiatives with coordinates read in the utilities.nls file (Only for setup)
   ask n-of 5 (patches with [pcategory = "neighbourhood initiative"])[
     sprout-initiatives 1 [
@@ -254,8 +261,9 @@ to setup
       set initiativeslocation patch-here
       set label who
       set label-color black
+      set pls_value pls_effect "pos" "zerotomedium"
   ]]
-  ;; Schools
+  ;;;;; CREATE SCHOOLS
   ;;; Create schools with coordinates read in the utilities.nls file (Only for setup)
   ask n-of 13 (patches with [pcategory = "school"])[
     sprout-schools 1 [
@@ -266,8 +274,8 @@ to setup
       set label who
       set label-color black
       set problemyouth_1 1
+      set pls_value pls_effect "pos" "zerotomedium"
   ]]
-
   ;; Assign patches with problem youth in supermarkets and schools
   ask schools[
     ask patch-here[
@@ -275,9 +283,8 @@ to setup
       set problemyouth_2 1
     ]
   ]
-
-  ;; Religious Buildings
-  ;;; Create schools with coordinates read in the utilities.nls file (Only for setup)
+  ;;;;;; CREATE RELIGIOUS CENTERS
+  ;;; Create religious centers with coordinates read in the utilities.nls file (Only for setup)
   ask n-of 6 (patches with [pcategory = "religious"])[
     sprout-religious 1 [
       set color magenta
@@ -286,9 +293,9 @@ to setup
       set religiouslocation patch-here
       set label who
       set label-color black
+      set pls_value pls_effect "pos" "zerotomedium"
   ]]
-
-  ;; Supermarket
+  ;;;;;; CREATE SUPERMARKETS
   ;;; Create supermarkets with coordinates read in the utilities.nls file (Only for setup)
   ask n-of 4 (patches with [pcategory = "supermarket"])[
     sprout-supermarkets 1 [
@@ -299,8 +306,8 @@ to setup
       set problemyouth_1 1
       set label who
       set label-color black
+      set pls_value pls_effect "pos" "zerotomedium"
   ]]
-
   ;; Assign patches with problem youth in supermarkets and schools
   ask supermarkets[
     ask patch-here[
@@ -308,8 +315,7 @@ to setup
       set problemyouth_2 1
     ]
   ]
-
-  ;;Policestation
+  ;;;;;; CREATE POLICESTATIONS
   ;;;Create police stations at coordinates read in the utilities.nls file
   ask n-of 1 (patches with [pcategory = "police station"])[
     sprout-policestations 1 [
@@ -319,23 +325,24 @@ to setup
       set policestationslocation patch-here
       set label who
       set label-color black
+      set pls_value pls_effect "pos" "zerotomedium"
   ]]
-
-  ;; GARBAGE
+  ;;;;;; CREATE INITIAL GARBAGE
   create-garbage 4 [
     setxy random-xcor random-ycor
     set shape "square"
     set size 12
     set color orange
     set garbagelocation patch-here
+    set pls_value pls_effect "neg" "small"
   ]
-
-  ;; GARBAGECOLLECTORS
+  ;;;;;; CREATE GARBAGECOLLECTORS
   create-garbagecollectors 4 [
     setxy random-xcor random-ycor
     set shape "person"
     set size 12
     set color orange
+    set pls_value pls_effect "pos" "small"
     set homelocation patch-here ; records the home location of agent
     if random 100 < 38 ; 37% have children
       [ set children 1 + random-poisson 0.5
@@ -346,13 +353,10 @@ to setup
     ]
     set target_supermarket min-one-of supermarkets [distance myself]
   ]
-
-  ;; POLICEOFFICERS
-
+  ;;;;;; CREATE POLICEOFFICERS
   create-policeofficers Lever_PoliceOfficers[
     ;setxy random-xcor random-ycor
     setxy polstation_x polstation_y
-    ;setxy 0 0
     set shape "person"
     set size 15
     set color black
@@ -364,22 +368,20 @@ to setup
       [ set children 0 ]
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
   ]
-
-  ;; COMMUNITYWORKERS
+  ;;;;;; CREATE COMMUNITYWORKERS
   create-communityworkers Lever_CommunityWorkers [
     setxy community_x community_y
-    ;setxy 0 0
     set shape "person"
     set size 20
     set color blue
     set homelocation patch-here ; records the home location of agent
+    set pls_value pls_effect "pos" "medium" ; citizen encounters raise pls moderately = medium
     if random 100 < 38 ; 37% have children
       [ set children 1 + random-poisson 0.5 ]
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
   ]
     ;; create individual schedule for agent based on children, religion, job, initiatives
-
-  ;; CITIZENS
+  ;;;;;; CREATE CITIZENS
   create-citizens Lever_Citizens [
     setxy random-xcor random-ycor
     set shape "person"
@@ -387,17 +389,19 @@ to setup
     set color grey
     set homelocation patch-here
     set pls_individual 50 ; max 100
+    set pls_value pls_effect "pos" "small"
+    set turtles_in_range []
     set burglary_recent 0 ; indicator if burglary recently occurred to citizen
     set urge_to_start_initiative 0 ; indicates urge to start an initiative
     set target_supermarket min-one-of supermarkets [distance myself] ; assign favorite(primary) supermarket
     if random 100 < 38 ; 37% have children
-      [ set children 1 + random-poisson 0.5 
+      [ set children 1 + random-poisson 0.5
       set target_school min-one-of schools [distance myself]]
     if random 100 < 61 ; 60% have job
       [ set hasjob 1
       set target_job min-one-of jobs [distance myself]]
     if random 100 < 13 ; 12% have initiative
-      [ set hasinitiative 1 
+      [ set hasinitiative 1
       set target_initiative one-of initiatives]
     if random 2 > 0 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
       [set hasreligion 1
@@ -405,9 +409,7 @@ to setup
       ]
     ]
 
-  set alternative_target_list (list schools religious supermarkets comcentre citizens communityworkers garbagecollectors) ; policeofficers problemyouth initiatives policestations <-- uncomment once implemented !
-
-    ;; TIMESETUP
+  ;;;;;; TIMESETUP
   set minutenow 0 ; minute counter, reset at 60
   set hournow 0 ; hour counter, reset at 24
   set daynow 1 ; day of the week, reset after 7 days
@@ -415,20 +417,12 @@ to setup
   set yearnow 1 ; end at year 4
   set workday 1
   set schoolday 1
- ; set timenow [ yearnow weeknow daynow hournow minutenow ] ; hh:mm, reset after 23:50 -> 00:00
 
-    ;; PLS_SETUP
+  ;;;;;; PLS_SETUP and related effects (garbage, burglaries)
   set pls_global (sum [pls_individual] of citizens) / count citizens
-  set pls_pos_small random 2
-  set pls_pos_medium (5 - random 3)
-  set pls_pos_high (8 - random 3)
-  set pls_neg_small random -3
-  set pls_neg_medium (-5 + random 2)
-  set pls_neg_high 10
 
   set garbageprobability 1  ; set the standard probability of garbage appearing
-  set garbage_cap 20 ; caps the max amount of garbage created per instant. per defined formula, max possible amount is 11.
-                    ; probably a cap around 5 is recommended
+  set garbage_cap 20 ; caps the max amount of garbage created per instant. Per formula, at very low pls max possible amount is 11.
   set burglaryprobability 1 ; set the standard probability of burglary occuring
 
   reset-ticks
@@ -439,12 +433,9 @@ to go
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; PLS-RELATED EVENTS
-
 set pls_global (sum [pls_individual] of citizens) / count citizens ; re-evaluates global PLS rating every
-
 set garbagefactor ((1 - pls_global / 100) * garbageprobability) ; evaluate garbagefactor in dependence of global pls-value. high pls -> low factor
 set burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate burglaryfactor in dependence of global pls-value. high pls -> low factor
-
 ;;;;;; END PLS
 ;;;;;;;;;;;;;;;;;;;;;;
 
@@ -506,27 +497,23 @@ ask citizens [
       if target = [] [
         set target item schedule-counter schedule_start
       ]
-      face target
-      ]
+    ]
     if hournow < endtime[
       move-turtles
       if distance target = 0 and (last schedule_start) != target[
         set schedule-counter schedule-counter + 1
         set target item schedule-counter schedule_start
-        face target
       ]
     ]
     if hournow = endtime and minutenow = 0 [
       set schedule-counter 0
       set target item schedule-counter schedule_end
-      face target
     ]
     if hournow > endtime[
       move-turtles
       if distance target = 0 and target != homelocation [
         set schedule-counter schedule-counter + 1
         set target item schedule-counter schedule_end
-        face target
         ]
       ]
     ]
@@ -534,6 +521,26 @@ ask citizens [
     ;; --> pls_individual update by encounters and burglaries
     ;; --> related: "ask garbagecollector 37 [ ask patches in-radius 10 [set pcolor red]]"
     ;; --> depending on PLS, citizens start an initiative at citizen location
+    if length (list other turtles in-radius 10) > 0 [
+      ;;;; pls POSITIVE
+        ;;;;; psmall
+          ;; pls citizen encounters
+        ;;;;;;; pmedium
+          ;; pls communityworker encounters ; Is approached by citizen agents, especially citizens who are active in a citizen initiative (or want to start one).
+        ;;;;;;; phigh
+      ;;;; pls NEGATIVE
+        ;;;;;;; nsmall
+        ;;;;;;; nmedium
+        ;;;;;;; nhigh
+      ;; pls policeofficer encounters
+      ;; pls problemyouth encounters
+      ;; pls garbage encounters
+      ;; pls burglary event
+      ;; pls locations (QR codes): supermarkets, schools, religious, policestations, initiatives, comcentre
+    ]
+    ;     foreach (list other turtles in-radius 10) [ ask self [set pls_individual pls_individual + 1]   ]
+    ;;; example:     ask slef [ show (list other turtles in-radius 10)]
+    ;   ]
   ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -786,16 +793,18 @@ to spawn-random-garbage
     set color orange
     set size 12
     set garbagelocation patch-here
+    set pls_value pls_effect "neg" "small"
   ]
 end
 
-to spawn-probyouth-garbage
+to spawn-probyouth-garbage                        ;; --> more initiatives reduces creation-factor of problemyouth !!
   ask patches with [problemyouth_2 = 2][
     sprout-garbage 1[
     set shape "square"
     set color orange
     set size 12
     set garbagelocation patch-here
+    set pls_value pls_effect "neg" "small"
     ]
   ]
 end
@@ -837,6 +846,31 @@ end
 to-report PBernoulli [ p ]
   report random-float 1 < p
 end
+
+to-report pls_effect [ direction quality ] ; direction = pos/neg , quality = small/medium/high
+  if direction = "pos" [
+    (ifelse
+      quality = "small" [ report random 2 ]
+      quality = "medium" [ report (5 - random 3) ]
+      quality = "high" [ report (8 - random 3) ]
+      quality = "zerotomedium" [ report random 5 ]
+    )
+  ]
+  if direction = "neg" [
+    (ifelse
+      quality = "small" [ report random -3 ]
+      quality = "medium" [ report ( - 5 + random 2) ]
+      quality = "high" [ report ( - 10 ) ]
+    )
+  ]
+;  set pls_pos_small random 2
+;  set pls_pos_medium (5 - random 3)
+;  set pls_pos_high (8 - random 3)
+;  set pls_neg_small random -3
+;  set pls_neg_medium (-5 + random 2)
+;  set pls_neg_high -10
+end
+
 @#$#@#$#@
 GRAPHICS-WINDOW
 218
