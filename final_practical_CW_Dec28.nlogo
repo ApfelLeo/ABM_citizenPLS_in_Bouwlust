@@ -8,6 +8,7 @@ breed [policeofficers policeofficer]
 breed [problemyouth problemyoungster]
 breed [citizens citizen]
 
+
 ; Sites as agents
 breed [comcentre a-comcentre]
 breed [initiatives initiative]
@@ -17,6 +18,7 @@ breed [jobs job]
 breed [supermarkets supermarket]
 breed [policestations policestation]
 breed [garbage a-garbage]
+breed [polstations polstation]
 breed [burglaries burglary]
 
 globals [
@@ -39,7 +41,7 @@ globals [
   yearnow ; end at year 4
   workday ; day 1 to 5 of the week
   schoolday ; == workday, day 1 to 5 of the week
-  starttime ; starttime of working-/schoolday at 0800 = 48 ticks
+    starttime ; starttime of working-/schoolday at 0800 = 48 ticks
   endtime ; endtime of working-/schoolday at 1800 = 108 ticks
   ;;;; time tick = 10min
   ;;;; day-cylce = 144 ticks
@@ -51,6 +53,7 @@ globals [
   pls_neg_small
   pls_neg_medium
   pls_neg_high
+  pls_burglary
   initiative_pressure
 
   ;; event factors
@@ -74,7 +77,14 @@ globals [
   g_col ; standard garbage color
   gres_col ; garbage color when targeted by garbagecollector (reserved)
 
+  ; Problem youth counter location
+  probYouth-counter
+  py_col
+  pyres_col
 
+  ;burglaries
+  b_col  ; standard burglary color
+  bres_col ; burglary color when targetered by policeofficers (planned to visit)
 ]
 
 patches-own [
@@ -85,6 +95,7 @@ patches-own [
   problemyouth_2 ; value that indicate the problem youth
   garbage-counter ; count the number of garbage agent in a radius
 ]
+
 
 garbagecollectors-own [
   homelocation ; the home patch
@@ -100,6 +111,7 @@ garbagecollectors-own [
   target_supermarket ; variable that determines the nearest supermarket from home
   schedule-counter ; variable for iterate on dayly schedule
 ]
+
 
 communityworkers-own [
   homelocation ; the home patch
@@ -138,9 +150,11 @@ citizens-own [
   target_religious ; variable that determines the nearest religious building from home
   target_initiative ; variable that determines the nearest initiative from home
   schedule-counter ; variable for iterate on dayly schedule
-  burglary_recent ; indicator if burglary recently occurred to citizen
-  burglary_date ; indicates when burglary occurred to citizen
-  urge_to_start_initiative ; indicates urge to start an initiative
+  burglary_condition  ; variable that save if a burglary for this citizen happen (0: No, 1:Yes)
+
+  citizens_with_urge ; indicates urge to start an initiative
+  QR_counter; variable with the number of QR codes encountered
+
 ]
 
 garbage-own [
@@ -161,23 +175,24 @@ policeofficers-own [
   target_school ; variable that determines the nearest school
   target_religious ; variable that determines the nearest religious building
   schedule-counter
+
+  target_burglary ; targetting the burglary
+  target_probYouth ; targetting the problem youth location
 ]
 
 comcentre-own[
-  comcentrelocation
+  comcentrelocation ; location community center
 ]
 
 jobs-own[
-  jobslocation
-]
-
-policestations-own[
-  policestationslocation
+  jobslocation ; jjobs location
 ]
 
 initiatives-own[
-  initiativeslocation
-  viability
+  initiativeslocation ; save the location for each innitative
+  origin_time ; variable with the time of creation
+  number_visits ; counter for the number of visits
+
 ]
 
 schools-own[
@@ -189,21 +204,24 @@ supermarkets-own[
   supermarketlocation
   problemyouth_1 ;; For problem youth
 ]
-
 religious-own[
-  religiouslocation
+  religiouslocation ; religious center location
 ]
 
 burglaries-own[
-  burglarylocation
-  burglary_date
+  burglarylocation ; burglary location
+  burglary_date  ; day of the week that burglary happened
+  citizen_ID ; identifies the citizen at burglary-home location.
+]
+
+polstations-own[
+  polstationlocation
 ]
 
 problemyouth-own[
   problemyouthlocation
 ]
-
-to move-to-world-edge ;; moves until reaches edge of world ==> alternative for citizen going to job
+to move-to-world-edge ;; moves until reaches edge of world
   loop [
     if not can-move? 1 [stop]
     fd 1
@@ -218,6 +236,12 @@ to setup
   set endtime 18
   set g_col orange ; standard garbage color
   set gres_col brown ; garbage color when targeted by garbagecollector (reserved)
+
+  set b_col red
+  set bres_col brown
+
+  set py_col yellow
+  set pyres_col brown
   ;;;; CREATES locations as agents
 
   ;; Jobs on Edges
@@ -271,7 +295,7 @@ to setup
       set problemyouth_1 1
   ]]
 
-  ;; Assign patches with problem youth in supermarkets and schools
+  ;; Assign patches with Problem Youth in supermarkets and schools
   ask schools[
     ask patch-here[
       set pcolor brown
@@ -295,7 +319,7 @@ to setup
   ;;; Create supermarkets with coordinates read in the utilities.nls file (Only for setup)
   ask n-of 4 (patches with [pcategory = "supermarket"])[
     sprout-supermarkets 1 [
-      set color yellow
+      set color py_col
       set shape "house"
       set size 15
       set supermarketlocation patch-here
@@ -304,7 +328,7 @@ to setup
       set label-color black
   ]]
 
-  ;; Assign patches with problem youth in supermarkets and schools
+  ;; Assign patches with Problem Youth in supermarkets and schools
   ask supermarkets[
     ask patch-here[
       set pcolor brown
@@ -312,17 +336,26 @@ to setup
     ]
   ]
 
+
   ;;Policestation
   ;;;Create police stations at coordinates read in the utilities.nls file
   ask n-of 1 (patches with [pcategory = "police station"])[
-    sprout-policestations 1 [
+    sprout-polstations 1 [
       set color black
       set shape "house"
       set size 12
-      set policestationslocation patch-here
+      set polstationlocation patch-here
       set label who
       set label-color black
   ]]
+
+  ;; TIMESETUP
+  set minutenow 0 ; minute counter, reset at 60
+  set hournow 0 ; hour counter, reset at 24
+  set daynow 1 ; day of the week, reset after 7 days
+  set weeknow 1 ; week of the year, reset after 52 weeks
+  set yearnow 1 ; end at year 4
+ ; set timenow [ yearnow weeknow daynow hournow minutenow ] ; hh:mm, reset after 23:50 -> 00:00
 
   ;; GARBAGE
   create-garbage 4 [
@@ -334,7 +367,7 @@ to setup
   ]
 
   ;; GARBAGECOLLECTORS
-  create-garbagecollectors 4 [
+  create-garbagecollectors Lever_garbagecollector [
     setxy random-xcor random-ycor
     set shape "person"
     set size 12
@@ -366,9 +399,11 @@ to setup
        ]
       [ set children 0 ]
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
+
   ]
 
   ;; COMMUNITYWORKERS
+
   create-communityworkers Lever_CommunityWorkers [
     setxy community_x community_y
     ;setxy 0 0
@@ -382,6 +417,8 @@ to setup
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
   ]
     ;; create individual schedule for agent based on children, religion, job, initiatives
+
+
 
   ;; CITIZENS
   create-citizens Lever_Citizens [
@@ -411,6 +448,7 @@ to setup
   ;]
 
   set alternative_target_list (list schools religious supermarkets comcentre citizens communityworkers garbagecollectors) ; policeofficers problemyouth initiatives policestations <-- uncomment once implemented !
+
 
     ;; TIMESETUP
   set minutenow 0 ; minute counter, reset at 60
@@ -455,9 +493,61 @@ set pls_global (sum [pls_individual] of citizens) / count citizens ; re-evaluate
 if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
   spawn-random-garbage
 ]
-
-;;;;;; End GARBAGE
+;;;;;; End
 ;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;QR code increments when near the initiatives
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ask initiatives [
+  ask citizens in-radius 3 [
+      set QR_counter QR_counter + 1
+      ifelse pls_individual <= 92
+        [set pls_individual pls_individual + pls_pos_high]
+      [ifelse pls_individual = 93
+        [set pls_individual pls_individual + random-poisson  3.5]
+      [ifelse pls_individual = 94
+        [set pls_individual pls_individual + random-poisson 3]
+      [ifelse pls_individual = 95
+          [ set pls_individual pls_individual + pls_pos_medium]
+      [ifelse pls_individual = 96
+          [ set pls_individual pls_individual + random-poisson 2]
+      [ifelse pls_individual = 97
+         [ set pls_individual pls_individual + random-poisson 1.5]
+      [ifelse pls_individual = 98
+         [ set pls_individual pls_individual + random-poisson 1 ]
+      [ifelse pls_individual = 99
+        [ set pls_individual pls_individual + pls_pos_small ]
+      [if pls_individual = 100
+         [ set pls_individual pls_individual + 0 ]
+                    ]
+                  ]
+                ]
+              ]
+            ]
+          ]
+        ]
+      ]
+      ]]
+
+  ask citizens with [QR_counter > 3 and hasjob = 1]
+  [ set citizens_with_urge citizens_with_urge + 1]
+  ask citizens [ if citizens_with_urge > 0.5 * Lever_Citizens
+    [
+      hatch-initiatives 1 [
+      setxy random-xcor random-ycor
+      set color blue
+      set shape "tree"
+      set size 15
+      set initiativeslocation patch-here
+      set origin_time 0
+      set label who
+      set label-color black ]]]
+  ask initiatives [ if hournow = 0
+    [set origin_time origin_time + 1] ]
+  ask communityworkers [ask initiatives in-radius 3 [set number_visits number_visits + 1]]
+  ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CITIZENS
@@ -541,6 +631,7 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
     ;; --> pls_individual update by encounters and burglaries
     ;; --> related: "ask garbagecollector 37 [ ask patches in-radius 10 [set pcolor red]]"
     ;; --> depending on PLS, citizens start an initiative at citizen location
+
   ]
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  COMMUNITY WORKERS
@@ -567,10 +658,13 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
       ]
 
     ]
-   ask communityworkers [
-    show schedule_start
-    show schedule_end
-   ]
+   ;print(word daynow "-" hournow)
+   ;ask communityworkers [
+   ; show schedule_start
+   ; print("to")
+   ; show schedule_end
+   ; print("---")
+   ;]
   ]
 
 
@@ -580,6 +674,7 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
       set target []
     ]
      if hournow >= starttime [
+
       if hournow = starttime and minutenow = 0[
         if target = [] [
           set target item schedule-counter schedule_start
@@ -612,7 +707,159 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
         ]
       ]
     ]
+
   ]
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ;;;  PROBLEM YOUTH
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ;;; PROBLEM YOUTH --- > is created at starttime; destroyed at endtime
+  let probProblemyouth 0.2
+if hournow = starttime [
+    ask patches with [problemyouth_2 = 1][
+      if pBernoulli (probProblemyouth)[set problemyouth_2  2]
+    ]
+  ask patches with [problemyouth_2 = 2][
+    sprout-problemyouth 1 [
+      set color py_col
+      set shape "face sad"
+      set size 20
+      set problemyouthlocation patch-here
+    ]
+  ]
+]
+
+if hournow = endtime [
+    ask problemyouth[
+      ask patch-here[set problemyouth_2 1]
+      die
+    ]
+  ]
+
+if hournow > starttime and hournow < endtime and (hournow mod 3 = 0) and minutenow = 0 [ ; every three hours the problem youth generates litter
+  spawn-probYouth-garbage ;; only creates garbage with problemyouth = 2
+]
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ;;;  INTERACTION PROBLEM YOUTH; BRUGLARIES AND POLICE
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+ask patches with [problemyouth_2 = 1][
+   set garbage-counter count garbage in-radius 3
+  ]
+
+ask policeofficers [
+    if hournow = 0 [
+      set schedule-counter 0
+      set target []
+      set schedule_start []
+      set target_probYouth []
+      set target_burglary []
+    ]
+    if hournow >= starttime and hournow < endtime[
+      if target = [] [ ;; Target can be problem youth or burglaries
+        ;set target_burglary min-one-of burglaries [distance myself]
+        ;set target_probYouth min-one-of (patches with[problemyouth_2 = 2])[distance myself] ;;target problem youth if there are nor burglaries
+        ifelse min-one-of burglaries [distance myself] != nobody[ ; b_col is red if its available, if its reserve is brown
+          ifelse [color] of min-one-of burglaries [distance myself] = b_col [
+           set target_burglary min-one-of burglaries [distance myself]
+           set target target_burglary
+           ask target_burglary [set color bres_col]
+          ][
+           ifelse min-one-of problemyouth [distance myself] != nobody[
+              ifelse [color] of min-one-of problemyouth [distance myself] = py_col[
+                set target_probYouth min-one-of problemyouth [distance myself] ;;target problem youth if there are nor burglaries
+                set target target_probYouth
+                ask target_probYouth [set color pyres_col]
+            ][set target one-of one-of alternative_target_list]
+          ][set target one-of one-of alternative_target_list]
+        ]
+        ][
+           ifelse min-one-of problemyouth[distance myself] != nobody[
+              ifelse [color] of min-one-of problemyouth[distance myself] = py_col[
+              set target_probYouth min-one-of problemyouth[distance myself] ;;target problem youth if there are nor burglaries
+                set target target_probYouth
+                ask target [set color pyres_col]
+            ][set target one-of one-of alternative_target_list]
+          ][set target one-of one-of alternative_target_list]
+        ]
+        face target
+      ]
+
+      move-turtles;---> if they can do some rounds in circles just add the other function (FABIO)
+      ;show target
+      ;;; Interaction police and problem youth (police in the patch --> problem youth moves suitable location)
+      let turtleCheck is-turtle? target
+
+
+      ifelse turtleCheck [
+        if distance target = 0 [
+          ;; Burglaries to die
+          if target != nobody[
+            if [breed] of target = burglaries [
+              let id_c2 [citizen_ID] of target_burglary
+              ask citizens with [who = id_c2] [
+                set burglary_condition 0 ; burglary condition:= no
+              ]
+              ask target [die]
+            ]
+          ]
+          ;; Problem Youth
+          if target != nobody[
+            if [breed] of target = problemyouth [
+              ;ask target [die]
+              set probYouth-counter count patches with [problemyouth_2 = 1]
+              ifelse probYouth-counter > 0 [
+                ask target_probYouth [
+                  move-to one-of (patches with [problemyouth_2 = 1])
+                  set color yellow
+                ]
+              ][
+                ask target_probYouth [die]
+              ]
+            ]
+          ]
+          set target []
+        ]
+      ][
+        if distance target = 0 [set target []]
+      ]
+    ]
+   if hournow >= endtime [
+      set target homelocation
+      face target
+      move-turtles
+   ]
+]
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;; ;;;  SETTING BURGLARIES ACCORDING TO PLS
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+
+  if hournow = 0 and minutenow = 0[
+    ifelse 0 <= pls_global and pls_global < 25 [ ; low burglaries 1 per week
+      set pls_burglary "L"
+      if PBernoulli (1 / 7 ) [spawn_burglaries 1]
+    ]
+    [
+      ifelse 25 <= pls_global and pls_global < 50 [; Medium-Low burglaries 1 per 2 week
+        set pls_burglary "M-L"
+        if PBernoulli (1 / 14 ) [spawn_burglaries 1]
+      ]
+      [
+        ifelse 50 <= pls_global and pls_global < 75 [ ; Medium-High burglaries 1 per 3 week
+          set pls_burglary "M-H"
+          if PBernoulli (1 / 21 ) [spawn_burglaries 1]
+        ]
+        [
+          ifelse  75 <= pls_global and pls_global <= 100 [ ; Medium-High burglaries 1 per month
+            set pls_burglary "H"
+            if PBernoulli (1 / 30 ) [spawn_burglaries 1]
+          ][error "pls-overall"]
+        ]
+      ]
+    ]
+  ]
+
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  GARBAGECOLLECTORS
@@ -711,151 +958,8 @@ ask garbagecollectors [
   ]
 ;;;;;; END GARBAGECOLLECTORS
 
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;Police Stations
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-; if hournow = 0 and minutenow = 0 [
-;   ask policeofficers [
-;     set schedule_start []
-;     set schedule_end []
-;     set schedule_start fput (one-of policestations) schedule_start
-;     set schedule_end fput homelocation schedule_end; schedule home
-;     set target []
-;     ]
-;   ask policeofficers with [hasreligion > 0][
-;     if PBernoulli (1 / 7) [
-;       set target_religious min-one-of religious [distance myself]
-;       set schedule_start fput target_religious schedule_start ; add religious building to schedule, first position
-;       ]
-;     ]
-;   ask policeofficers with [children > 0][
-;     if PBernoulli (5 / 7) [
-;       set target_school min-one-of schools [distance myself]
-;       set schedule_start fput target_school schedule_start ; add school to schedule, first position
-;       set schedule_end fput target_school schedule_end ; add school to schedule, first position
-;       ]
-;     ]
-;   ]
-;
-;
-; ask policeofficers [
-;   if hournow = 0 [
-;     set schedule-counter 0
-;     set target []
-;     ]
-;   if hournow >= starttime [
-;
-;     if hournow = starttime and minutenow = 0[
-;       if target = [] [
-;         set target item schedule-counter schedule_start
-;         ]
-;       face target
-;       ]
-;     if hournow < endtime[
-;       move-turtles
-;       if distance target = 0 and (last schedule_start) != target[
-;         set schedule-counter schedule-counter + 1
-;         set target item schedule-counter schedule_start
-;         face target
-;         ]
-;       ]
-;     if hournow = endtime and minutenow = 0 [
-;       set schedule-counter 0
-;       set target item schedule-counter schedule_end
-;       face target
-;       ]
-;     if hournow > endtime[
-;       move-turtles
-;       if distance target = 0 and target != homelocation [
-;         set schedule-counter schedule-counter + 1
-;         set target item schedule-counter schedule_end
-;         face target
-;         ]
-;       ]
-;     ]
-;   ]
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; ;;;  PROBLEM YOUTH
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;;; PROBLEM YOUTH --- > is created at starttime; destroyed at endtime
-  let probProblemyouth 0.5
-if hournow = starttime [
-    ask patches with [problemyouth_2 = 1][
-      if pBernoulli (probProblemyouth)[set problemyouth_2  2]
-    ]
-  ask patches with [problemyouth_2 = 2][
-    sprout-problemyouth 1 [
-      set color yellow
-      set shape "face sad"
-      set size 30
-      set problemyouthlocation patch-here
-    ]
-  ]
-]
-
-if hournow = endtime [
-    ask problemyouth[
-      ask patch-here[set problemyouth_2 1]
-      die
-    ]
-  ]
-
-if hournow > starttime and hournow < endtime and (hournow mod 3 = 0) and minutenow = 0 [ ; every three hours the problem youth generates litter
-  spawn-probYouth-garbage ;; only creates garbage with problemyouth = 2
-]
-
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; ;;;  INTERACTION PROBLEM YOUTH AND POLICE
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ask patches with [problemyouth_2 = 1][
-   set garbage-counter count garbage in-radius 3
-  ]
-
-; ask policeofficers [
-;      if hournow = 0 [
-;      set schedule-counter 0
-;      set target []
-;    ]
-;    if hournow >= starttime and hournow < endtime[
-;      ;if yearnow = 1 and daynow = 1 and hournow = starttime and minutenow = 0[
-;        if target = [] [
-;          set target one-of patches with[problemyouth_2 = 2]
-;          face target
-;        ]
-;      ;]
-;      move-turtles;---> if they can do some rounds in circles just add the other function (FABIO)
-;
-;      ;;; Interaction police and problem youth
-;      if distance target = 0 [
-;        if any? problemyouth-here [
-;          ask problemyouth-here [set shape "face happy"] ;;; Interaction with police eliminate problem youth
-;          set target []
-;          show [who] of problemyouth-here
-;        ]
-;      ask n-of 1 (patches with [problemyouth_2 = 1])[
-;      sprout-problemyouth 1 [
-;        set color yellow
-;        set shape "face sad"
-;        set size 30
-;        set problemyouthlocation patch-here
-;        ask patch-here [set problemyouth_2  2]
-;        ]
-;      ]
-;      ]
-;   ]
-;     if hournow >= endtime [
-;      set target homelocation
-;      face target
-;      move-turtles
-;    ]
-;]
-
-
 timestep
-
+  ; sprout-initiative 1 for creating 1 initiative at citizen location
 end
 
 
@@ -905,13 +1009,33 @@ to spawn-probYouth-garbage
   ]
 end
 
-
 to move-turtles
        ifelse distance target < distance_target
       [ move-to target ]
       [ face target
       fd citizen_speed ]
 end
+
+to spawn_burglaries [num_burglaries]
+  ;if (num_burglaries > Lever_Citizens) [let num_burglaries ceiling Lever_Citizens / 2]
+  ask n-of num_burglaries citizens[
+    set burglary_condition 1 ; burglary condition:= yes
+    let id_c who ;; identifier of citizens
+    ask homelocation [ ; create at the location new bruglary (agent)
+      sprout-burglaries 1[
+        set shape "X"
+        set color b_col
+        set size 12
+        set burglarylocation patch-here
+        set burglary_date daynow
+        set citizen_ID id_c
+        let id_b who
+      ]
+    ]
+    ;set burglary_ID [id_b] of
+  ]
+end
+
 
 to move-turtles-radius
   ifelse  (distance target) < (5 * distance_target)
@@ -930,7 +1054,6 @@ to move-turtles-radius
     fd citizen_speed
   ]
 end
-
 to random-walk
   set heading random 360 ; alternative: try to set random coordinates as target
   fd citizen_speed
@@ -961,8 +1084,8 @@ GRAPHICS-WINDOW
 814
 0
 784
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -1002,10 +1125,10 @@ NIL
 1
 
 SWITCH
-4
-208
-125
-241
+122
+265
+220
+298
 verbose?
 verbose?
 0
@@ -1013,10 +1136,10 @@ verbose?
 -1000
 
 SWITCH
-4
-243
-114
-276
+13
+265
+123
+298
 debug?
 debug?
 0
@@ -1042,30 +1165,30 @@ hournow
 11
 
 SLIDER
-4
-278
-176
-311
+14
+300
+186
+333
 citizen_speed
 citizen_speed
 0
 100
-20.0
+30.0
 1
 1
 NIL
 HORIZONTAL
 
 SLIDER
-4
-313
-176
-346
+13
+332
+185
+365
 minute_step
 minute_step
 0
 59
-5.0
+21.5
 0.5
 1
 NIL
@@ -1083,38 +1206,38 @@ minutenow
 11
 
 SLIDER
-4
-348
-176
-381
+13
+365
+185
+398
 distance_target
 distance_target
 0
 100
-20.0
+45.0
 1
 1
 NIL
 HORIZONTAL
 
 INPUTBOX
-3
-481
+0
+132
 143
-541
+192
 Lever_CommunityWorkers
-5.0
+3.0
 1
 0
 Number
 
 INPUTBOX
-3
-543
-152
-603
+0
+188
+88
+248
 Lever_Citizens
-10.0
+20.0
 1
 0
 Number
@@ -1152,22 +1275,22 @@ weeknow
 1
 11
 
-MONITOR
-2
-139
-79
-184
-NIL
-pls_global
-17
+INPUTBOX
+88
+188
+218
+248
+Lever_garbagecollector
+10.0
 1
-11
+0
+Number
 
 INPUTBOX
-3
-419
-143
-479
+8
+416
+157
+476
 Lever_PoliceOfficers
 2.0
 1
