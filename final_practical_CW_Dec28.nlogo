@@ -420,8 +420,6 @@ to setup
   ]
     ;; create individual schedule for agent based on children, religion, job, initiatives
 
-
-
   ;; CITIZENS
   create-citizens Lever_Citizens [
     setxy random-xcor random-ycor
@@ -445,12 +443,6 @@ to setup
     set target_job min-one-of jobs [distance myself]
     set color green
     ]
-
-  ;ask citizens with [hasjob = 1 and children > 0][
-  ;  set size 15
-    ;watch-me
-  ;]
-
   set alternative_target_list (list schools religious supermarkets comcentre citizens communityworkers garbagecollectors) ; policeofficers problemyouth initiatives policestations <-- uncomment once implemented !
 
 
@@ -550,9 +542,6 @@ ask initiatives [
     [set origin_time origin_time + 1] ]
   ask communityworkers [ask initiatives in-radius 3 [set number_visits number_visits + 1]]
   ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
-
-
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;QR code increments when near the initiatives
@@ -716,13 +705,6 @@ ask initiatives [
       ]
 
     ]
-   ;print(word daynow "-" hournow)
-   ;ask communityworkers [
-   ; show schedule_start
-   ; print("to")
-   ; show schedule_end
-   ; print("---")
-   ;]
   ]
 
 
@@ -799,11 +781,10 @@ if hournow > starttime and hournow < endtime and (hournow mod 3 = 0) and minuten
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  INTERACTION PROBLEM YOUTH; BRUGLARIES AND POLICE
+;;;;;; Police Officer -> if Burglary -> go there
+;;;;;;                -> Not Burglary -> identify locations qith problem youth
+;;;;;;                -> No problem youth -> pick an agent and visit him (alternative_target_list)
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ask patches with [problemyouth_2 = 1][
-   set garbage-counter count garbage in-radius 3
-  ]
-
 ask policeofficers [
     if hournow = 0 [
       set schedule-counter 0
@@ -814,17 +795,15 @@ ask policeofficers [
     ]
     if hournow >= starttime and hournow < endtime[
       if target = [] [ ;; Target can be problem youth or burglaries
-        ;set target_burglary min-one-of burglaries [distance myself]
-        ;set target_probYouth min-one-of (patches with[problemyouth_2 = 2])[distance myself] ;;target problem youth if there are nor burglaries
         ifelse min-one-of burglaries [distance myself] != nobody[ ; b_col is red if its available, if its reserve is brown
-          ifelse [color] of min-one-of burglaries [distance myself] = b_col [
-           set target_burglary min-one-of burglaries [distance myself]
+          ifelse [color] of min-one-of burglaries [distance myself] = b_col [ ; change the color and its reserved by the police officer
+           set target_burglary min-one-of burglaries [distance myself] ; identify closest burglary, only if it happens
            set target target_burglary
            ask target_burglary [set color bres_col]
           ][
            ifelse min-one-of problemyouth [distance myself] != nobody[
-              ifelse [color] of min-one-of problemyouth [distance myself] = py_col[
-                set target_probYouth min-one-of problemyouth [distance myself] ;;target problem youth if there are nor burglaries
+              ifelse [color] of min-one-of problemyouth [distance myself] = py_col[ ; change the color and its reserved by the police officer
+                set target_probYouth min-one-of problemyouth [distance myself] ;; target problem youth if there are nor burglaries
                 set target target_probYouth
                 ask target_probYouth [set color pyres_col]
             ][set target one-of one-of alternative_target_list]
@@ -832,7 +811,7 @@ ask policeofficers [
         ]
         ][
            ifelse min-one-of problemyouth[distance myself] != nobody[
-              ifelse [color] of min-one-of problemyouth[distance myself] = py_col[
+              ifelse [color] of min-one-of problemyouth[distance myself] = py_col[ ; change the color and its reserved by the police officer
               set target_probYouth min-one-of problemyouth[distance myself] ;;target problem youth if there are nor burglaries
                 set target target_probYouth
                 ask target [set color pyres_col]
@@ -842,12 +821,10 @@ ask policeofficers [
         face target
       ]
 
-      move-turtles;---> if they can do some rounds in circles just add the other function (FABIO)
-      ;show target
+      move-turtles
+
       ;;; Interaction police and problem youth (police in the patch --> problem youth moves suitable location)
       let turtleCheck is-turtle? target
-
-
       ifelse turtleCheck [
         if distance target = 0 [
           ;; Burglaries to die
@@ -922,102 +899,101 @@ ask policeofficers [
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  GARBAGECOLLECTORS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;ask garbagecollectors [
-;;; on WORKDAYS
- ; if workday = 1 and hournow + minutenow = 0[
-  ;  set schedule_start []
-   ; set schedule_end []
-    ;  if hasreligion > 0 and PBernoulli ( 1 / 7 ) [
-     ; set schedule_start fput target_religious schedule_start
-    ;]
-    ;if children > 0 [
-     ; set schedule_start lput target_school schedule_start
-      ;set schedule_end fput target_school schedule_end
-    ;]
-    ;set schedule_end lput homelocation schedule_end; schedule home
-    ;if schedule_start = [] [
-     ; ifelse [color = g_col] of min-one-of garbage [distance myself] [
-      ;  set target_garbage min-one-of garbage [distance myself]
-       ; ask target_garbage [set color gres_col]
-        ;set schedule_start lput target_garbage schedule_start
-      ;][set target_garbage one-of garbage with [color = g_col]
-       ;o ifelse target_garbage != nobody [
-         ; ask target_garbage [set color gres_col]
-          ;set schedule_start lput target_garbage schedule_start]
-          ;[set target one-of one-of alternative_target_list  ; if last target reached but != garbage-breed and timenow <endtime: choose random target
-           ; set schedule_start lput target schedule_start]    ; add to schedule
-     ;   ]
-    ;]
-  ;]
-;;; on WEEKENDS
- ; if workday = 0 and hournow + minutenow = 0 [
-  ;  set schedule_start []
-   ; set schedule_end []
-    ;  if hasreligion > 0 and PBernoulli ( 1 / 7 ) [
-     ; set schedule_start fput target_religious schedule_start
-    ;]
-    ;set schedule_start lput target_supermarket schedule_start ; add supermarket building to schedule, last position
-    ;set schedule_end lput homelocation schedule_end ; to return home at end of day
-  ;]
-;]
-;ask garbagecollectors [
- ;    if hournow = 0 [
-  ;    set schedule-counter 0
-   ;   set target []
-    ;]
-     ;if hournow >= starttime [
-      ;if hournow = starttime and minutenow = 0[
-       ; if target = [] [set target item schedule-counter schedule_start]
-        ;face target]
-      ;if hournow < endtime[    ;; add --> while on "last" of "schedule_start", continue going to garbage
-       ; move-turtles
-        ;if distance target = 0 and (last schedule_start) != target[
-         ; set schedule-counter schedule-counter + 1
-          ;set target item schedule-counter schedule_start
-          ;face target]
-        ;if distance target = 0 and (last schedule_start) = target[
-         ; ifelse [breed] of target = garbage [                 ; if last entry is garbage, eat garbage and remove from list
-           ; set schedule_start remove target schedule_start
-            ;set schedule-counter schedule-counter - 1          ; remove counter 1
-            ;ask target [die]                                   ; kill target garbage
-            ;ifelse min-one-of garbage [distance myself] = nobody [
-             ; set target one-of one-of alternative_target_list
-              ;set schedule_start lput target schedule_start][
-              ;ifelse [color = g_col] of min-one-of garbage [distance myself] [ ; need new target on schedule
-               ; set target_garbage min-one-of garbage [distance myself]        ; if closest garbage is free/orange, target this
-                ;ask target_garbage [set color gres_col]                        ; reservev garbage by setting color brown
-                ;set target target_garbage
-                ;set schedule_start lput target_garbage schedule_start          ; add target to schedule
-              ;][set target_garbage one-of garbage with [color = g_col]         ; if closest garbage already taken, choose random with col=orange
-               ; ifelse target_garbage = nobody [                               ; if chosen turns out dead
-                ;  set target one-of one-of alternative_target_list             ; if new target is nobody and timenow <endtime: choose random target
-                 ; set schedule_start lput target schedule_start]               ; add new target to schedule
-                  ;[ask target_garbage [set color gres_col]                     ; else: chosen available, reserve/set col=brown
-                  ;set schedule_start lput target_garbage schedule_start        ; add to schedule
-                  ;set target target_garbage]] ] ]                              ; set target
-           ;[set target one-of one-of alternative_target_list  ; if last target reached but != garbage-breed and timenow <endtime: choose random target
-            ;set schedule_start lput target schedule_start]    ; add to schedule
-            ;face target
-            ;]
-          ;]
-      ;]
-      ;if hournow = endtime and minutenow = 0 [
-       ; set schedule-counter 0
-        ;set target item schedule-counter schedule_end
-        ;ask garbage [set color g_col]
-        ;face target]
-      ;if hournow > endtime[
-       ; move-turtles
-        ;if distance target = 0 and target != homelocation [
-         ; set schedule-counter schedule-counter + 1
-          ;set target item schedule-counter schedule_end
-          ;face target]
-      ;]
-  ;]
+ask garbagecollectors [
+;; on WORKDAYS
+  if workday = 1 and hournow + minutenow = 0[
+    set schedule_start []
+    set schedule_end []
+      if hasreligion > 0 and PBernoulli ( 1 / 7 ) [
+      set schedule_start fput target_religious schedule_start
+    ]
+    if children > 0 [
+      set schedule_start lput target_school schedule_start
+      set schedule_end fput target_school schedule_end
+    ]
+    set schedule_end lput homelocation schedule_end; schedule home
+    if schedule_start = [] [
+      ifelse [color = g_col] of min-one-of garbage [distance myself] [
+        set target_garbage min-one-of garbage [distance myself]
+        ask target_garbage [set color gres_col]
+        set schedule_start lput target_garbage schedule_start
+      ][set target_garbage one-of garbage with [color = g_col]
+       o ifelse target_garbage != nobody [
+          ask target_garbage [set color gres_col]
+          set schedule_start lput target_garbage schedule_start]
+          [set target one-of one-of alternative_target_list  ; if last target reached but != garbage-breed and timenow <endtime: choose random target
+            set schedule_start lput target schedule_start]    ; add to schedule
+        ]
+    ]
+  ]
+;; on WEEKENDS
+  if workday = 0 and hournow + minutenow = 0 [
+    set schedule_start []
+    set schedule_end []
+      if hasreligion > 0 and PBernoulli ( 1 / 7 ) [
+      set schedule_start fput target_religious schedule_start
+    ]
+    set schedule_start lput target_supermarket schedule_start ; add supermarket building to schedule, last position
+    set schedule_end lput homelocation schedule_end ; to return home at end of day
+  ]
+]
+ask garbagecollectors [
+     if hournow = 0 [
+      set schedule-counter 0
+      set target []
+    ]
+     if hournow >= starttime [
+      if hournow = starttime and minutenow = 0[
+        if target = [] [set target item schedule-counter schedule_start]
+        face target]
+      if hournow < endtime[    ;; add --> while on "last" of "schedule_start", continue going to garbage
+        move-turtles
+        if distance target = 0 and (last schedule_start) != target[
+          set schedule-counter schedule-counter + 1
+          set target item schedule-counter schedule_start
+          face target]
+        if distance target = 0 and (last schedule_start) = target[
+          ifelse [breed] of target = garbage [                 ; if last entry is garbage, eat garbage and remove from list
+            set schedule_start remove target schedule_start
+            set schedule-counter schedule-counter - 1          ; remove counter 1
+            ask target [die]                                   ; kill target garbage
+            ifelse min-one-of garbage [distance myself] = nobody [
+              set target one-of one-of alternative_target_list
+              set schedule_start lput target schedule_start][
+              ifelse [color = g_col] of min-one-of garbage [distance myself] [ ; need new target on schedule
+                set target_garbage min-one-of garbage [distance myself]        ; if closest garbage is free/orange, target this
+                ask target_garbage [set color gres_col]                        ; reservev garbage by setting color brown
+                set target target_garbage
+                set schedule_start lput target_garbage schedule_start          ; add target to schedule
+              ][set target_garbage one-of garbage with [color = g_col]         ; if closest garbage already taken, choose random with col=orange
+                ifelse target_garbage = nobody [                               ; if chosen turns out dead
+                  set target one-of one-of alternative_target_list             ; if new target is nobody and timenow <endtime: choose random target
+                  set schedule_start lput target schedule_start]               ; add new target to schedule
+                  [ask target_garbage [set color gres_col]                     ; else: chosen available, reserve/set col=brown
+                  set schedule_start lput target_garbage schedule_start        ; add to schedule
+                  set target target_garbage]] ] ]                              ; set target
+           [set target one-of one-of alternative_target_list  ; if last target reached but != garbage-breed and timenow <endtime: choose random target
+            set schedule_start lput target schedule_start]    ; add to schedule
+            face target
+            ]
+          ]
+      ]
+      if hournow = endtime and minutenow = 0 [
+        set schedule-counter 0
+        set target item schedule-counter schedule_end
+        ask garbage [set color g_col]
+        face target]
+      if hournow > endtime[
+        move-turtles
+        if distance target = 0 and target != homelocation [
+          set schedule-counter schedule-counter + 1
+          set target item schedule-counter schedule_end
+          face target]
+      ]
+  ]
 ;;;;;; END GARBAGECOLLECTORS
 
 timestep
-  ; sprout-initiative 1 for creating 1 initiative at citizen location
 end
 
 
@@ -1075,7 +1051,6 @@ to move-turtles
 end
 
 to spawn_burglaries [num_burglaries]
-  ;if (num_burglaries > Lever_Citizens) [let num_burglaries ceiling Lever_Citizens / 2]
   ask n-of num_burglaries citizens[
     set burglary_condition 1 ; burglary condition:= yes
     let id_c who ;; identifier of citizens
@@ -1090,28 +1065,9 @@ to spawn_burglaries [num_burglaries]
         let id_b who
       ]
     ]
-    ;set burglary_ID [id_b] of
   ]
 end
 
-
-to move-turtles-radius
-  ifelse  (distance target) < (5 * distance_target)
-  [ ;; walking on circles to location
-  ; ; reused for the code  Circular Path Example -
-  ; Public Domain:
-  ; To the extent possible under law, Uri Wilensky has waived all
-  ; copyright and related or neighboring rights to this model.
-
-  let r 5 * distance_target
-  fd (pi * r / 180) * citizen_speed / 10
-  rt (citizen_speed / 10)
-  ]
-  [ ;; moving straight to objective location
-    face target
-    fd citizen_speed
-  ]
-end
 to random-walk
   set heading random 360 ; alternative: try to set random coordinates as target
   fd citizen_speed
