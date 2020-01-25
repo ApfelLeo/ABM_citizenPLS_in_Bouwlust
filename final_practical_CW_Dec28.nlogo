@@ -127,7 +127,7 @@ communityworkers-own [
   target_school ; variable that determines the nearest school
   target_religious ; variable that determines the nearest religious building
   schedule-counter ; variable for iterate on dayly schedule
-
+  initiative_work ; initiative selection every day 1:= selected , 0:= Available
 ]
 
 citizens-own [
@@ -194,6 +194,8 @@ initiatives-own[
   initiativeslocation ; save the location for each innitative
   origin_time ; variable with the time of creation
   number_visits ; counter for the number of visits
+  available ; initiative identifier 1:= selected , 0:= Available
+  counter_visits ; indicator if community worker visit the initiative
 ]
 
 schools-own[
@@ -523,59 +525,8 @@ ask initiatives [
           ]
         ]
       ]
-      ]]
-
-  ask citizens with [QR_counter > 3 and hasjob = 1]
-  [ set citizens_with_urge citizens_with_urge + 1]
-  ask citizens [ if citizens_with_urge > 0.5 * Lever_Citizens
-    [
-      hatch-initiatives 1 [
-      setxy random-xcor random-ycor
-      set color blue
-      set shape "tree"
-      set size 15
-      set initiativeslocation patch-here
-      set origin_time 0
-      set label who
-      set label-color black ]]]
-  ask initiatives [ if hournow = 0
-    [set origin_time origin_time + 1] ]
-  ask communityworkers [ask initiatives in-radius 3 [set number_visits number_visits + 1]]
-  ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;QR code increments when near the initiatives
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ask initiatives [
-  ask citizens in-radius 3 [
-      set QR_counter QR_counter + 1
-      ifelse pls_individual <= 92
-        [set pls_individual pls_individual + pls_pos_high]
-      [ifelse pls_individual = 93
-        [set pls_individual pls_individual + random-poisson  3.5]
-      [ifelse pls_individual = 94
-        [set pls_individual pls_individual + random-poisson 3]
-      [ifelse pls_individual = 95
-          [ set pls_individual pls_individual + pls_pos_medium]
-      [ifelse pls_individual = 96
-          [ set pls_individual pls_individual + random-poisson 2]
-      [ifelse pls_individual = 97
-         [ set pls_individual pls_individual + random-poisson 1.5]
-      [ifelse pls_individual = 98
-         [ set pls_individual pls_individual + random-poisson 1 ]
-      [ifelse pls_individual = 99
-        [ set pls_individual pls_individual + pls_pos_small ]
-      [if pls_individual = 100
-         [ set pls_individual pls_individual + 0 ]
-                    ]
-                  ]
-                ]
-              ]
-            ]
-          ]
-        ]
       ]
-      ]]
+  ]
 
   ask citizens with [QR_counter > 3 and hasjob = 1]
   [ set citizens_with_urge citizens_with_urge + 1]
@@ -590,11 +541,20 @@ ask initiatives [
       set origin_time 0
       set label who
       set label-color black ]]]
-  ask initiatives [ if hournow = 0
-    [set origin_time origin_time + 1] ]
-  ask communityworkers [ask initiatives in-radius 3 [set number_visits number_visits + 1]]
-  ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
+  if hournow = 0 and minutenow = 0 [
+    ask initiatives [
+     set origin_time origin_time + 1
+      if counter_visits > 0 [
+        set number_visits number_visits + 1
+      ]
+    ]
+  ]
 
+  if hournow >= starttime and hournow <= endtime [
+      ask communityworkers [ask initiatives in-radius 3 [set counter_visits 1]]
+  ]
+
+  ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CITIZENS
@@ -655,7 +615,6 @@ ask initiatives [
           set schedule-counter schedule-counter + 1
           set target item schedule-counter schedule_start
           face target
-          ;show target
         ]
       ]
       if hournow = endtime and minutenow = 0 [
@@ -684,12 +643,16 @@ ask initiatives [
 ;;; ;;;  COMMUNITY WORKERS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
   if hournow = 0 and minutenow = 0[
+    ask initiatives [set available 0]
     ask communityworkers [
       set schedule_start []
       set schedule_end []
-      set schedule_start fput (one-of initiatives) schedule_start
+      set initiative_work (one-of initiatives with [available = 0])
+      ask initiative_work [set available 1]
+      set schedule_start fput initiative_work schedule_start
       set schedule_end fput homelocation schedule_end; schedule home
       set target []
+      show initiative_work
     ]
     ask communityworkers with [hasreligion > 0][
       if PBernoulli (1 / 7) [
@@ -720,7 +683,6 @@ ask initiatives [
           set target item schedule-counter schedule_start
         ]
         face target
-        ;show target
       ]
       if hournow < endtime[
         move-turtles
@@ -728,14 +690,12 @@ ask initiatives [
           set schedule-counter schedule-counter + 1
           set target item schedule-counter schedule_start
           face target
-          ;show target
         ]
       ]
       if hournow = endtime and minutenow = 0 [
         set schedule-counter 0
         set target item schedule-counter schedule_end
         face target
-        ;show target
       ]
       if hournow > endtime[
         move-turtles
@@ -743,12 +703,12 @@ ask initiatives [
           set schedule-counter schedule-counter + 1
           set target item schedule-counter schedule_end
           face target
-          ;show target
         ]
       ]
     ]
 
   ]
+  ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  PROBLEM YOUTH
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -918,7 +878,7 @@ ask garbagecollectors [
         ask target_garbage [set color gres_col]
         set schedule_start lput target_garbage schedule_start
       ][set target_garbage one-of garbage with [color = g_col]
-       o ifelse target_garbage != nobody [
+       ifelse target_garbage != nobody [
           ask target_garbage [set color gres_col]
           set schedule_start lput target_garbage schedule_start]
           [set target one-of one-of alternative_target_list  ; if last target reached but != garbage-breed and timenow <endtime: choose random target
@@ -947,7 +907,8 @@ ask garbagecollectors [
         if target = [] [set target item schedule-counter schedule_start]
         face target]
       if hournow < endtime[    ;; add --> while on "last" of "schedule_start", continue going to garbage
-        move-turtles
+        ;move-turtles
+        ifelse target != nobody [
         if distance target = 0 and (last schedule_start) != target[
           set schedule-counter schedule-counter + 1
           set target item schedule-counter schedule_start
@@ -976,6 +937,12 @@ ask garbagecollectors [
             set schedule_start lput target schedule_start]    ; add to schedule
             face target
             ]
+           move-turtles
+        ]
+        [ ;; FABIO added this part to fix the garnage collector error
+          set target one-of one-of alternative_target_list             ; if new target is nobody and timenow <endtime: choose random target
+          set schedule_start lput target schedule_start
+        ]
           ]
       ]
       if hournow = endtime and minutenow = 0 [
@@ -1140,9 +1107,9 @@ NIL
 
 SWITCH
 122
-265
+496
 220
-298
+529
 verbose?
 verbose?
 1
@@ -1151,9 +1118,9 @@ verbose?
 
 SWITCH
 13
-265
+496
 123
-298
+529
 debug?
 debug?
 0
@@ -1179,10 +1146,10 @@ hournow
 11
 
 SLIDER
-14
-300
-186
-333
+1087
+261
+1259
+294
 citizen_speed
 citizen_speed
 0
@@ -1194,15 +1161,15 @@ NIL
 HORIZONTAL
 
 SLIDER
-13
-332
-185
-365
+1086
+293
+1258
+326
 minute_step
 minute_step
 0
 59
-21.5
+25.5
 0.5
 1
 NIL
@@ -1220,15 +1187,15 @@ minutenow
 11
 
 SLIDER
-13
-365
-185
-398
+1086
+326
+1258
+359
 distance_target
 distance_target
 0
 100
-45.0
+68.0
 1
 1
 NIL
@@ -1236,9 +1203,9 @@ HORIZONTAL
 
 INPUTBOX
 0
-132
-143
-192
+134
+140
+194
 Lever_CommunityWorkers
 3.0
 1
@@ -1301,15 +1268,26 @@ Lever_garbagecollector
 Number
 
 INPUTBOX
-8
-416
-157
-476
+0
+248
+112
+308
 Lever_PoliceOfficers
 2.0
 1
 0
 Number
+
+MONITOR
+5
+331
+82
+376
+pls_global
+pls_global
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
