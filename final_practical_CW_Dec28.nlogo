@@ -59,6 +59,8 @@ globals [
   garbage_cap
   burglaryprobability
   burglaryfactor
+  visibility_range ; variable to set when objects in range to be noticed by agents
+  interaction_range ; sets range when citizens are able to interact
 
   ;; state finances
   treasury ; 100-#police*10-#communityworker*5-#garbagecollector*4-#initiatives*2 , limit 0
@@ -120,7 +122,6 @@ communityworkers-own [
 
 citizens-own [
   pls_individual ; every agent's individual PLS value, default is 50/100
-  turtles_in_range ; recognizes other turtles in range to help setting pls_individual values
   homelocation ; the home patch
   targetlocation ; assigns target location from schedule
   children ; number of children ; 37% have children
@@ -141,6 +142,8 @@ citizens-own [
   burglary_date ; indicates when burglary occurred to citizen
   urge_to_start_initiative ; indicates urge to start an initiative
   pls_value
+  encounters_list ; registers encounters during one day
+  turtles_in_range ; recognizes other turtles in range to help setting pls_individual values
 ]
 
 garbage-own [
@@ -227,6 +230,8 @@ to setup
   set alternative_target_list (list schools 
   religious supermarkets comcentre citizens communityworkers garbagecollectors
   initiatives) ; policeofficers policestations) ;  problemyouth <-- uncomment once implemented !
+  set visibility_range 25 ; sets range when objects are noticed by agents
+  set interaction_range 10 ; sets range when citizen are able to interact
 
   ;;;;;; CREATE JOBLOCATIONS
   let coords [[0 0] [0 784] [814 784] [814 0]]
@@ -372,7 +377,7 @@ to setup
   create-communityworkers Lever_CommunityWorkers [
     setxy community_x community_y
     set shape "person"
-    set size 20
+    set size 12
     set color blue
     set homelocation patch-here ; records the home location of agent
     set pls_value pls_effect "pos" "medium" ; citizen encounters raise pls moderately = medium
@@ -381,6 +386,7 @@ to setup
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
   ]
     ;; create individual schedule for agent based on children, religion, job, initiatives
+  
   ;;;;;; CREATE CITIZENS
   create-citizens Lever_Citizens [
     setxy random-xcor random-ycor
@@ -391,6 +397,7 @@ to setup
     set pls_individual 50 ; max 100
     set pls_value pls_effect "pos" "small"
     set turtles_in_range []
+    set encounters_list []
     set burglary_recent 0 ; indicator if burglary recently occurred to citizen
     set urge_to_start_initiative 0 ; indicates urge to start an initiative
     set target_supermarket min-one-of supermarkets [distance myself] ; assign favorite(primary) supermarket
@@ -451,11 +458,47 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
 ;;;;;; CITIZENS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ask citizens [
+  ;;;;;; PLS effects
+  ;;; register turtles in visibility_range = 25
+  ;;; --> garbage
+  ;;;     assumption: has negative, no matter which garbage, but worse if there is lots of garbage
+  if any? garbage in-radius visibility_range [
+    let x count garbage in-radius visibility_range
+    set pls_individual pls_individual + x * pls_effect "neg" "small"
+  ]
+  ;;; --> problemyouth
+  ;;;     assumption: has negative, no matter which p-youth, but worse if there are many problem-youngsters
+  if any? problemyouth in-radius visibility_range [
+    let x count problemyouth in-radius visibility_range
+    set pls_individual pls_individual + x * pls_effect "neg" "small"
+  ]
+  ;;; --> other citizens
+  ;;;     assumption: the citizens are registered, to only have an effect once a day. prevents over-estimation if walking side-by-side
+  if any? turtles in-radius interaction_range [ ; registers any turtles, including garbage, any citizens and buildings/locations
+    set turtles_in_range [who] of turtles in-radius interaction_range
+    foreach turtles_in_range [ x ->
+      ifelse member? x encounters_list [] [
+        set encounters_list lput x encounters_list
+        (ifelse                                 ; only agents of specific breed are recorded for pls-effect
+          [breed] of turtle x = citizens [set pls_individual pls_individual + pls_effect "pos" "small"]
+          [breed] of turtle x = garbagecollectors [set pls_individual pls_individual + pls_effect "pos" "small"]
+          [breed] of turtle x = policeofficers [
+            ifelse burglary_recent = 1 [set pls_individual pls_individual + pls_effect "pos" "high"]
+            [set pls_individual pls_individual + pls_effect "pos" "medium"]
+          ]
+          [breed] of turtle x = communityworkers [set pls_individual pls_individual + pls_effect "pos" "medium"]
+        )
+      ]
+    ]
+    set encounters_list remove-duplicates encounters_list ; removes duplicate non-citizen agents
+  ]
+
   if hournow + minutenow = 0 [ ; at 00:00 set schedule
     set schedule_start []
     set schedule_end []
     set schedule-counter 0
     set target []
+    set encounters_list []
     ;;; on WORKDAYS
     if workday = 1 [
         if hasreligion > 0 and PBernoulli (1 / 7) [ ; assuming, religion is less important for children.
@@ -715,20 +758,21 @@ ask garbagecollectors [
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  PROBLEM YOUTH
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-  ;;; PROBLEM YOUTH --- > is created at starttime; destroyed at endtime
-  let probProblemyouth 0.5
+;;; PROBLEM YOUTH --- > is created at starttime; destroyed at endtime
+let probProblemyouth 0.5
 if hournow = starttime [
     ask patches with [problemyouth_2 = 1][
       if pBernoulli (probProblemyouth)[set problemyouth_2  2]
     ]
-  ask patches with [problemyouth_2 = 2][
-    sprout-problemyouth 1 [
-      set color yellow
-      set shape "face sad"
-      set size 30
-      set problemyouthlocation patch-here
-    ]
-  ]
+;;;; is very slow somehow???
+;  ask patches with [problemyouth_2 = 2][
+;    sprout-problemyouth 1 [
+;      set color yellow
+;      set shape "face sad"
+;      set size 30
+;      set problemyouthlocation patch-here
+;    ]
+;  ]
 ]
 
 if hournow = endtime [
