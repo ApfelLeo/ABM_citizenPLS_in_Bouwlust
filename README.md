@@ -26,13 +26,20 @@ neighbourhood.
 
 - policeofficers (agent) -> V.
 - problemyouth (agent) -> F.
-- burglaries (agent) -> I.
+- burglaries (agent) -> F.
+- PLS logic and the change of model behaviour from it -> I.
+  - open:
+    - pls-effect of locations = QR codes
+    - pls-effect of other agents - if any --> discuss
+    - pls-effect fine-tunine
+  - done:
+    - citizen count garbage, p-youth as neg. pls-effect
+    - citizen register passing other citizen-agents (police, g-collectors, comm-workers, citizens) and get pos. pls-effect
+    - includes difference in effect of passing policeofficer after burglary-event
 
 ### 3. still to do
 
-- PLS logic and the change of model behaviour from it
 - spending mechanism/budget tracking
 - initiative viability mechanism --> initiatives die if not visited frequently
-- in "to go/CITIZENS": only citizens with [hasjob = 1] are given schedules, i.e. pick up children, go to religious center, etc...
 - check if logic can be simplified, i.e. combine similar if-statements
 - write report

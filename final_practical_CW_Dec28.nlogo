@@ -483,7 +483,9 @@ ask citizens [
           [breed] of turtle x = citizens [set pls_individual pls_individual + pls_effect "pos" "small"]
           [breed] of turtle x = garbagecollectors [set pls_individual pls_individual + pls_effect "pos" "small"]
           [breed] of turtle x = policeofficers [
-            ifelse burglary_recent = 1 [set pls_individual pls_individual + pls_effect "pos" "high"]
+            ifelse burglary_recent = 1 [
+              set pls_individual pls_individual + pls_effect "pos" "high"
+              set burglary_recent 0]
             [set pls_individual pls_individual + pls_effect "pos" "medium"]
           ]
           [breed] of turtle x = communityworkers [set pls_individual pls_individual + pls_effect "pos" "medium"]
