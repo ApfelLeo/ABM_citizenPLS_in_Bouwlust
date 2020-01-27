@@ -732,48 +732,33 @@ ask communityworkers [
     if distance target = 0 and target != homelocation [
       set schedule-counter schedule-counter + 1
       set target item schedule-counter schedule_end
-        ]
-      ][
-        if distance target = 0 [set target []]
       ]
     ]
-   if hournow >= endtime [
-      set target homelocation
-      face target
-      move-turtles
-   ]
+  ]
 ]
+
+ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; ;;;  SETTING BURGLARIES ACCORDING TO PLS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 
 if hournow = 0 and minutenow = 0[
-    ifelse 0 <= pls_global and pls_global < 25 [ ; low burglaries 1 per week
-      set pls_burglary "L"
-      if PBernoulli (1 / 7 ) [spawn_burglaries 1]
+  (ifelse
+    pls_global < 25 and PBernoulli (1 / 7 ) [ ; low pls -> burglaries 1 per week
+      spawn_burglaries 1 
     ]
-    [
-      ifelse 25 <= pls_global and pls_global < 50 [; Medium-Low burglaries 1 per 2 week
-        set pls_burglary "M-L"
-        if PBernoulli (1 / 14 ) [spawn_burglaries 1]
-      ]
-      [
-        ifelse 50 <= pls_global and pls_global < 75 [ ; Medium-High burglaries 1 per 3 week
-          set pls_burglary "M-H"
-          if PBernoulli (1 / 21 ) [spawn_burglaries 1]
-        ]
-        [
-          ifelse  75 <= pls_global and pls_global <= 100 [ ; Medium-High burglaries 1 per month
-            set pls_burglary "H"
-            if PBernoulli (1 / 30 ) [spawn_burglaries 1]
-          ][set pls_burglary "H"];error "pls-overall"]
-       ]
-     ]
-   ]
+    pls_global < 50 and PBernoulli (1 / 14 ) [; Medium-Low pls -> burglaries 1 per 2 week
+      spawn_burglaries 1
+    ]
+    pls_global < 75 and PBernoulli (1 / 21 ) [ ; Medium-High pls -> burglaries 1 per 3 week
+        spawn_burglaries 1
+    ]
+    pls_global <= 100 and PBernoulli (1 / 30 ) [ ; high pls -> burglaries 1 per month
+          spawn_burglaries 1
+    ]
+  )
 ]
-
-ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;  PROBLEMYOUTH
