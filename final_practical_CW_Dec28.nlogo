@@ -687,7 +687,6 @@ ask citizens [
       set schedule_start fput initiative_work schedule_start
       set schedule_end fput homelocation schedule_end; schedule home
       set target []
-      show initiative_work
     ]
     ask communityworkers with [hasreligion > 0][
       if PBernoulli (1 / 7) [
