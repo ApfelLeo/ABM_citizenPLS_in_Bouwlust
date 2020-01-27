@@ -82,6 +82,9 @@ globals [
   b_col  ; standard burglary color
   bres_col ; burglary color when targetered by policeofficers (planned to visit)
 
+  ;;
+  initiatives-counter ; initiatives counter
+  prop_Initiatives ; proportion among maximum of initiatives
 ]
 
 patches-own [
@@ -145,12 +148,11 @@ citizens-own [
   target_religious ; variable that determines the nearest religious building from home
   target_initiative ; variable that determines the nearest initiative from home
   schedule-counter ; variable for iterate on dayly schedule
-  burglary_recent ; indicator if burglary recently occurred to citizen
+  burglary_recent ; indicator if burglary recently occurred to citizen (0: No, 1:Yes)
   burglary_date ; indicates when burglary occurred to citizen
   urge_to_start_initiative ; indicates urge to start an initiative
   encounters_list ; registers encounters during one day
   turtles_in_range ; recognizes other turtles in range to help setting pls_individual values
-  burglary_condition  ; variable that save if a burglary for this citizen happen (0: No, 1:Yes)
   citizens_with_urge ; indicates urge to start an initiative
   QR_counter; variable with the number of QR codes encountered
 ]
@@ -207,13 +209,13 @@ initiatives-own[
 ]
 
 schools-own[
-  schoolslocation
+  toprobyouth_location
   problemyouth_1 ;; For problem youth
   pls_value
 ]
 
 supermarkets-own[
-  supermarketlocation
+  toprobyouth_location
   problemyouth_1 ;; For problem youth
   pls_value
 ]
@@ -234,6 +236,7 @@ burglaries-own[
 problemyouth-own[                                     ;; --> more initiatives reduces creation-factor of problemyouth !!
   problemyouthlocation
   pls_value
+  location_available
 ]
 
 
@@ -291,6 +294,7 @@ to setup
       set label who
       set label-color black
       set pls_value pls_effect "pos" "zerotomedium"
+      set origin_time 0
   ]]
   ;;;;; CREATE SCHOOLS
   ;;; Create schools with coordinates read in the utilities.nls file (Only for setup)
@@ -299,7 +303,7 @@ to setup
       set color red
       set shape "house"
       set size 12
-      set schoolslocation patch-here
+      set toprobyouth_location patch-here
       set label who
       set label-color black
       set problemyouth_1 1
@@ -307,7 +311,7 @@ to setup
   ]]
   ;; Assign patches with problem youth in supermarkets and schools
   ask schools[
-    ask patch-here[
+    ask toprobyouth_location[
       set pcolor brown
       set problemyouth_2 1
     ]
@@ -331,7 +335,7 @@ to setup
       set color py_col
       set shape "house"
       set size 15
-      set supermarketlocation patch-here
+      set toprobyouth_location patch-here
       set problemyouth_1 1
       set label who
       set label-color black
@@ -339,7 +343,7 @@ to setup
   ]]
   ;; Assign patches with problem youth in supermarkets and schools
   ask supermarkets[
-    ask patch-here[
+    ask toprobyouth_location[
       set pcolor brown
       set problemyouth_2 1
     ]
@@ -366,7 +370,7 @@ to setup
     set pls_value pls_effect "neg" "small"
   ]
   ;;;;;; CREATE GARBAGECOLLECTORS
-  create-garbagecollectors 4 [
+  create-garbagecollectors Lever_GarbageCollectors [
     setxy random-xcor random-ycor
     set shape "person"
     set size 12
@@ -458,13 +462,16 @@ to setup
 end
 
 to go
+
+set initiatives-counter count initiatives
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; TREASURY
-set treasury 100 - 10 * count policeofficers - 5 * count communityworkers - 4 * count garbagecollectors - 2 * count initiatives
+set treasury 100 - 10 * Lever_PoliceOfficers - 5 * Lever_CommunityWorkers - 4 * Lever_GarbageCollectors - 2 * initiatives-counter
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; PLS-RELATED GLOBAL
 set pls_global round ((sum [pls_individual] of citizens) / count citizens) ; re-evaluates global PLS rating every
+
 set garbagefactor ((1 - pls_global / 100) * garbageprobability) ; evaluate garbagefactor in dependence of global pls-value. high pls -> low factor
 set burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate burglaryfactor in dependence of global pls-value. high pls -> low factor
 ;;;;;; END PLS GLOBAL
@@ -472,78 +479,41 @@ set burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate bur
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CREATE GARBAGE
-if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
+;if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
+if (hournow mod 3 = 0) and minutenow = 0[
   spawn-random-garbage
 ]
 ;;;;;; END GARBAGE
 ;;;;;;;;;;;;;;;;;;;;;;
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;QR code increments when near the initiatives
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-ask initiatives [
-  ask citizens in-radius 3 [
-      set QR_counter QR_counter + 1
-   ]
-]
-
-  ask citizens with [QR_counter > 3 and hasjob = 1]
-  [ set citizens_with_urge citizens_with_urge + 1]
-  ask citizens [ if citizens_with_urge > 0.5 * Lever_Citizens
-    [
-      hatch-initiatives 1 [
-      setxy random-xcor random-ycor
-      set color blue
-      set shape "tree"
-      set size 15
-      set initiativeslocation patch-here
-      set origin_time 0
-      set label who
-      set label-color black ]]]
-  if hournow = 0 and minutenow = 0 [
-    ask initiatives [
-     set origin_time origin_time + 1
-      if counter_visits > 0 [
-        set number_visits number_visits + 1
-      ]
-    ]
-]
-
-if hournow >= starttime and hournow <= endtime [
-      ask communityworkers [ask initiatives in-radius 3 [set counter_visits 1]]
-]
-
-ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; MUNICIPALITY POLICIES
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; POLICIES GARBAGECOLLECTORS
 ; based on PLS municipality orders more garbage collectors when pls is low or less g-collectors when pls is high
-if hournow + minutenow = 0 [
-  if pls_global < 50 and count garbagecollectors < 11 [
-    (ifelse
-    pls_global > 40 and treasury > 3 [crt_gcollectors 1]
-    pls_global > 30 and treasury > 7 [crt_gcollectors 2]
-    pls_global > 20 and treasury > 11 [crt_gcollectors 3]
-    pls_global > 10 and treasury > 15 [crt_gcollectors 4]
-    pls_global > 0 and treasury > 19 [crt_gcollectors 5]
-    )
-  ]
-  if pls_global > 50 and count garbagecollectors > 2 [
-    (ifelse
-    pls_global < 60 [ask one-of garbagecollectors [die]]
-    pls_global < 70 [ask n-of 2 garbagecollectors [die]]
-    pls_global < 80 [ask n-of 3 garbagecollectors [die]]
-    pls_global < 90 [ask n-of 4 garbagecollectors [die]]
-    pls_global < 100 [ask n-of 5 garbagecollectors [die]]
-    )
-  ]
-]
+;if hournow + minutenow = 0 [
+;  if pls_global < 50 and count garbagecollectors < 11 [
+;    (ifelse
+;    pls_global > 40 and treasury > 3 [crt_gcollectors 1]
+;    pls_global > 30 and treasury > 7 [crt_gcollectors 2]
+;    pls_global > 20 and treasury > 11 [crt_gcollectors 3]
+;    pls_global > 10 and treasury > 15 [crt_gcollectors 4]
+;    pls_global > 0 and treasury > 19 [crt_gcollectors 5]
+;    )
+;  ]
+;  if pls_global > 50 and count garbagecollectors > 2 [
+;    (ifelse
+;    pls_global < 60 [ask one-of garbagecollectors [die]]
+;    pls_global < 70 [ask n-of 2 garbagecollectors [die]]
+;    pls_global < 80 [ask n-of 3 garbagecollectors [die]]
+;    pls_global < 90 [ask n-of 4 garbagecollectors [die]]
+;    pls_global < 100 [ask n-of 5 garbagecollectors [die]]
+;    )
+;  ]
+;]
 ;;; POL. POLICEOFFICERS
 ;;; POL. COMMUNITYWORKERS
 ;;; POL. INITIATIVES (max. number of supported initiatives)
-
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;QR code increments when near the initiatives
@@ -557,20 +527,23 @@ ask initiatives [
 ask citizens with [QR_counter > 3][
   set citizens_with_urge citizens_with_urge + 1
   ]
-ask citizens [
-  if citizens_with_urge > 0.5 * Lever_Citizens [
-    hatch-initiatives 1 [
+
+    let difference Lever_Number_of_initiatives - count initiatives
+    let prob 1 - (pls_global / 100 )
+    if pls_global < 25 and PBernoulli prob and difference > 0 [
+    create-initiatives 1 [
       setxy random-xcor random-ycor
       set color blue
-      set shape "tree"
+      set shape "house"
       set size 15
       set initiativeslocation patch-here
       set origin_time 0
       set label who
       set label-color black
+      ask citizens in-radius 100 [ set pls_individual pls_individual + pls_effect "pos" "high"]
     ]
   ]
-]
+
 if hournow = 0 and minutenow = 0 [
   ask initiatives [
     set origin_time origin_time + 1
@@ -764,7 +737,11 @@ if hournow = 0 and minutenow = 0[
 ;;;;;;  PROBLEMYOUTH
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;; PROBLEM YOUTH --- > is created at starttime; destroyed at endtime
-let probProblemyouth 0.2
+
+set prop_Initiatives (Lever_Number_of_initiatives - initiatives-counter) / Lever_Number_of_initiatives  ; inversely proportional to the number of initatives
+if prop_Initiatives < 0.05 [set prop_Initiatives 0.05]
+let probProblemyouth prop_Initiatives
+
 if hournow = starttime and minutenow = 0[
     ask patches with [problemyouth_2 = 1][
       if pBernoulli (probProblemyouth)[set problemyouth_2  2]
@@ -775,13 +752,14 @@ if hournow = starttime and minutenow = 0[
       set shape "face sad"
       set size 20
       set problemyouthlocation patch-here
+      show who
     ]
   ]
 ]
 
 if hournow = endtime [
     ask problemyouth[
-      ask patch-here[set problemyouth_2 1]
+      ask patch-here [set problemyouth_2 1]
       die
     ]
   ]
@@ -842,7 +820,7 @@ ask policeofficers [
           if [breed] of target = burglaries [
             let id_c2 [citizen_ID] of target_burglary
             ask citizens with [who = id_c2] [
-              set burglary_condition 0 ; burglary condition:= no
+              set burglary_recent  0 ; burglary condition:= no
             ]
             ask target [die]
           ]
@@ -850,15 +828,17 @@ ask policeofficers [
         ;; Problem Youth
         if target != nobody[
           if [breed] of target = problemyouth [
-            set probYouth-counter count patches with [problemyouth_2 = 1]
-            ifelse probYouth-counter > 0 [
-              ask target_probYouth [
-                move-to one-of (patches with [problemyouth_2 = 1])
-                set color yellow
+              ask target_probYouth [ set location_available one-of patches with [problemyouth_2 = 1] ]
+              set probYouth-counter count patches with [problemyouth_2 = 1]
+              ifelse probYouth-counter > 0 [
+                ask target_probYouth [
+                  ask patch-here [set problemyouth_2  1]
+                  move-to location_available
+                  set color yellow
+                ]
+              ][
+                ask target_probYouth [die]
               ]
-            ][
-              ask target_probYouth [die]
-            ]
           ]
         ]
         set target []
@@ -1034,9 +1014,9 @@ end
 
 to spawn_burglaries [num_burglaries]
   ask n-of num_burglaries citizens[
-    set burglary_condition 1 ; burglary condition:= yes
+    set burglary_recent  1 ; burglary condition:= yes
     let id_c who ;; identifier of citizens
-    ask homelocation [ ; create at the location new bruglary (agent)
+    ask homelocation [ ; create at the location new burglary (agent)
       sprout-burglaries 1[
         set shape "X"
         set color b_col
@@ -1173,8 +1153,8 @@ GRAPHICS-WINDOW
 814
 0
 784
-0
-0
+1
+1
 1
 ticks
 30.0
@@ -1315,7 +1295,7 @@ INPUTBOX
 143
 541
 Lever_CommunityWorkers
-5.0
+4.0
 1
 0
 Number
@@ -1326,7 +1306,7 @@ INPUTBOX
 152
 603
 Lever_Citizens
-275.0
+270.0
 1
 0
 Number
@@ -1381,7 +1361,7 @@ INPUTBOX
 143
 479
 Lever_PoliceOfficers
-2.0
+3.0
 1
 0
 Number
@@ -1396,6 +1376,75 @@ treasury
 17
 1
 11
+
+INPUTBOX
+2
+605
+151
+665
+Lever_GarbageCollectors
+4.0
+1
+0
+Number
+
+INPUTBOX
+5
+674
+154
+734
+Lever_Number_of_initiatives
+10.0
+1
+0
+Number
+
+MONITOR
+1058
+232
+1324
+277
+NIL
+count initiatives
+17
+1
+11
+
+PLOT
+1066
+312
+1266
+462
+PLS-Global Monitor
+Ticks
+pls-global
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot pls_global"
+
+PLOT
+1079
+499
+1279
+649
+Garbage-Monitor
+Ticks
+Garbage
+0.0
+10.0
+0.0
+10.0
+true
+false
+"" ""
+PENS
+"default" 1.0 0 -16777216 true "" "plot count garbage"
 
 @#$#@#$#@
 ## WHAT IS IT?
