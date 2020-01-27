@@ -61,6 +61,7 @@ globals [
   burglaryfactor
   visibility_range ; variable to set when objects in range to be noticed by agents
   interaction_range ; sets range when citizens are able to interact
+  qr_locations
 
   ;; state finances
   treasury ; 100-#police*10-#communityworker*5-#garbagecollector*4-#initiatives*2 , limit 0
@@ -227,11 +228,12 @@ to setup
   set endtime 18
   set g_col orange ; standard garbage color
   set gres_col brown ; garbage color when targeted by garbagecollector (reserved)
-  set alternative_target_list (list schools 
+  set alternative_target_list (list schools
   religious supermarkets comcentre citizens communityworkers garbagecollectors
-  initiatives) ; policeofficers policestations) ;  problemyouth <-- uncomment once implemented !
+  initiatives policeofficers policestations) ;  problemyouth <-- uncomment once implemented !
+  set qr_locations (list schools religious supermarkets initiatives comcentre policestations)
   set visibility_range 25 ; sets range when objects are noticed by agents
-  set interaction_range 10 ; sets range when citizen are able to interact
+  set interaction_range 15 ; sets range when citizen are able to interact
 
   ;;;;;; CREATE JOBLOCATIONS
   let coords [[0 0] [0 784] [814 784] [814 0]]
@@ -386,7 +388,7 @@ to setup
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
   ]
     ;; create individual schedule for agent based on children, religion, job, initiatives
-  
+
   ;;;;;; CREATE CITIZENS
   create-citizens Lever_Citizens [
     setxy random-xcor random-ycor
@@ -426,8 +428,6 @@ to setup
   set schoolday 1
 
   ;;;;;; PLS_SETUP and related effects (garbage, burglaries)
-  set pls_global (sum [pls_individual] of citizens) / count citizens
-
   set garbageprobability 1  ; set the standard probability of garbage appearing
   set garbage_cap 20 ; caps the max amount of garbage created per instant. Per formula, at very low pls max possible amount is 11.
   set burglaryprobability 1 ; set the standard probability of burglary occuring
@@ -437,64 +437,57 @@ to setup
 end
 
 to go
+;;;;;;;;;;;;;;;;;;;;;;
+;;;;;; TREASURY
+set treasury 100 - 10 * count policeofficers - 5 * count communityworkers - 4 * count garbagecollectors - 2 * count initiatives
 
 ;;;;;;;;;;;;;;;;;;;;;;
-;;;;;; PLS-RELATED EVENTS
-set pls_global (sum [pls_individual] of citizens) / count citizens ; re-evaluates global PLS rating every
+;;;;;; PLS-RELATED GLOBAL
+set pls_global round ((sum [pls_individual] of citizens) / count citizens) ; re-evaluates global PLS rating every
 set garbagefactor ((1 - pls_global / 100) * garbageprobability) ; evaluate garbagefactor in dependence of global pls-value. high pls -> low factor
 set burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate burglaryfactor in dependence of global pls-value. high pls -> low factor
-;;;;;; END PLS
+;;;;;; END PLS GLOBAL
 ;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;
-;;;;;; Create Garbage
+;;;;;; CREATE GARBAGE
 if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
   spawn-random-garbage
 ]
-;;;;;; End GARBAGE
+;;;;;; END GARBAGE
 ;;;;;;;;;;;;;;;;;;;;;;
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;; MORE GARBAGECOLLECTORS
+; based on PLS municipality orders more garbage collectors when pls is low or less g-collectors when pls is high
+if hournow + minutenow = 0 [
+  if pls_global < 50 and count garbagecollectors < 11 [
+    (ifelse
+    pls_global > 40 and treasury > 3 [crt_gcollectors 1]
+    pls_global > 30 and treasury > 7 [crt_gcollectors 2]
+    pls_global > 20 and treasury > 11 [crt_gcollectors 3]
+    pls_global > 10 and treasury > 15 [crt_gcollectors 4]
+    pls_global > 0 and treasury > 19 [crt_gcollectors 5]
+    )
+  ]
+  if pls_global > 50 and count garbagecollectors > 2 [
+    (ifelse
+    pls_global < 60 [ask one-of garbagecollectors [die]]
+    pls_global < 70 [ask n-of 2 garbagecollectors [die]]
+    pls_global < 80 [ask n-of 3 garbagecollectors [die]]
+    pls_global < 90 [ask n-of 4 garbagecollectors [die]]
+    pls_global < 100 [ask n-of 5 garbagecollectors [die]]
+    )
+  ]
+]
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CITIZENS
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ask citizens [
-  ;;;;;; PLS effects
-  ;;; register turtles in visibility_range = 25
-  ;;; --> garbage
-  ;;;     assumption: has negative, no matter which garbage, but worse if there is lots of garbage
-  if any? garbage in-radius visibility_range [
-    let x count garbage in-radius visibility_range
-    set pls_individual pls_individual + x * pls_effect "neg" "small"
-  ]
-  ;;; --> problemyouth
-  ;;;     assumption: has negative, no matter which p-youth, but worse if there are many problem-youngsters
-  if any? problemyouth in-radius visibility_range [
-    let x count problemyouth in-radius visibility_range
-    set pls_individual pls_individual + x * pls_effect "neg" "small"
-  ]
-  ;;; --> other citizens
-  ;;;     assumption: the citizens are registered, to only have an effect once a day. prevents over-estimation if walking side-by-side
-  if any? turtles in-radius interaction_range [ ; registers any turtles, including garbage, any citizens and buildings/locations
-    set turtles_in_range [who] of turtles in-radius interaction_range
-    foreach turtles_in_range [ x ->
-      ifelse member? x encounters_list [] [
-        set encounters_list lput x encounters_list
-        (ifelse                                 ; only agents of specific breed are recorded for pls-effect
-          [breed] of turtle x = citizens [set pls_individual pls_individual + pls_effect "pos" "small"]
-          [breed] of turtle x = garbagecollectors [set pls_individual pls_individual + pls_effect "pos" "small"]
-          [breed] of turtle x = policeofficers [
-            ifelse burglary_recent = 1 [
-              set pls_individual pls_individual + pls_effect "pos" "high"
-              set burglary_recent 0]
-            [set pls_individual pls_individual + pls_effect "pos" "medium"]
-          ]
-          [breed] of turtle x = communityworkers [set pls_individual pls_individual + pls_effect "pos" "medium"]
-        )
-      ]
-    ]
-    set encounters_list remove-duplicates encounters_list ; removes duplicate non-citizen agents
-  ]
 
+  ;;;;;; SCHEDULING
   if hournow + minutenow = 0 [ ; at 00:00 set schedule
     set schedule_start []
     set schedule_end []
@@ -537,6 +530,7 @@ ask citizens [
       ]
     ]
   ]
+  ;;;;;; EXECUTION
   if hournow >= starttime [ ; execute schedule at starttime
     if hournow = starttime and minutenow = 0[
       if target = [] [
@@ -544,10 +538,17 @@ ask citizens [
       ]
     ]
     if hournow < endtime[
+      let tmp_location patch-here
       move-turtles
-      if distance target = 0 and (last schedule_start) != target[
-        set schedule-counter schedule-counter + 1
-        set target item schedule-counter schedule_start
+      if distance target = 0 [
+        if tmp_location != patch-here and member? [breed] of target qr_locations [
+          set pls_individual pls_individual + [pls_value] of target
+          if min list [pls_individual] of self 100 = 100 [ set pls_individual 100 ]
+        ]
+        if (last schedule_start) != target[
+          set schedule-counter schedule-counter + 1
+          set target item schedule-counter schedule_start
+        ]
       ]
     ]
     if hournow = endtime and minutenow = 0 [
@@ -555,37 +556,18 @@ ask citizens [
       set target item schedule-counter schedule_end
     ]
     if hournow > endtime[
+      let tmp_location patch-here
       move-turtles
       if distance target = 0 and target != homelocation [
+        if tmp_location != patch-here and member? [breed] of target qr_locations [
+          set pls_individual pls_individual + [pls_value] of target
+          if min list [pls_individual] of self 100 = 100 [ set pls_individual 100 ]
+        ]
         set schedule-counter schedule-counter + 1
         set target item schedule-counter schedule_end
         ]
       ]
     ]
-    ;; --> add:
-    ;; --> pls_individual update by encounters and burglaries
-    ;; --> related: "ask garbagecollector 37 [ ask patches in-radius 10 [set pcolor red]]"
-    ;; --> depending on PLS, citizens start an initiative at citizen location
-    if length (list other turtles in-radius 10) > 0 [
-      ;;;; pls POSITIVE
-        ;;;;; psmall
-          ;; pls citizen encounters
-        ;;;;;;; pmedium
-          ;; pls communityworker encounters ; Is approached by citizen agents, especially citizens who are active in a citizen initiative (or want to start one).
-        ;;;;;;; phigh
-      ;;;; pls NEGATIVE
-        ;;;;;;; nsmall
-        ;;;;;;; nmedium
-        ;;;;;;; nhigh
-      ;; pls policeofficer encounters
-      ;; pls problemyouth encounters
-      ;; pls garbage encounters
-      ;; pls burglary event
-      ;; pls locations (QR codes): supermarkets, schools, religious, policestations, initiatives, comcentre
-    ]
-    ;     foreach (list other turtles in-radius 10) [ ask self [set pls_individual pls_individual + 1]   ]
-    ;;; example:     ask slef [ show (list other turtles in-radius 10)]
-    ;   ]
   ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
@@ -826,7 +808,7 @@ to timestep
 end
 
 to spawn-random-garbage
-  let new_garbage_amount round (abs (random-normal 1 (1 / garbageprobability)))  ; the garbageprobability-factor determines the standard deviation (SD)
+  let new_garbage_amount round (abs (random-normal 1 (1 / garbagefactor)))  ; the garbageprobability-factor determines the standard deviation (SD)
                                 ; of garbage creation. if pls is high (ex.90) -> factor is low (0.1), thus the SD is low SD: 1.
                                 ; with a random-normal distribution with mean=1, this results in garbage production of 0 and 2 at high pls
                                 ; and between 0 and 11 at low pls.
@@ -858,9 +840,12 @@ end
 to move-turtles
       ifelse target != nobody [
        ifelse distance target < distance_target
-      [ move-to target ]
-      [ face target
-      fd citizen_speed ]]
+        [ move-to target ]
+        [ face target
+          fd citizen_speed
+          if [breed] of self = citizens [pls_effect_citizens]
+          ]
+        ]
       [set target one-of one-of alternative_target_list
       set schedule_start lput target schedule_start
       set schedule_start remove nobody schedule_start]
@@ -909,14 +894,68 @@ to-report pls_effect [ direction quality ] ; direction = pos/neg , quality = sma
       quality = "high" [ report ( - 10 ) ]
     )
   ]
-;  set pls_pos_small random 2
-;  set pls_pos_medium (5 - random 3)
-;  set pls_pos_high (8 - random 3)
-;  set pls_neg_small random -3
-;  set pls_neg_medium (-5 + random 2)
-;  set pls_neg_high -10
 end
 
+to pls_effect_citizens
+  ;;;;;; PLS effects
+  ;;; register turtles in visibility_range = 25
+  ;;; --> garbage
+  ;;;     assumption: has negative, no matter which garbage, but worse if there is lots of garbage
+  if any? garbage in-radius visibility_range [
+    let x count garbage in-radius visibility_range
+    set pls_individual pls_individual + x * pls_effect "neg" "small"
+    if max list [pls_individual] of self 0 = 0 [ set pls_individual 0 ]
+  ]
+  ;;; --> problemyouth
+  ;;;     assumption: has negative, no matter which p-youth, but worse if there are many problem-youngsters
+  if any? problemyouth in-radius visibility_range [
+    let x count problemyouth in-radius visibility_range
+    set pls_individual pls_individual + x * pls_effect "neg" "small"
+    if max list [pls_individual] of self 0 = 0 [ set pls_individual 0 ]
+  ]
+  ;;; --> other citizens
+  ;;;     assumption: the citizens are registered, to only have an effect once a day. prevents over-estimation if walking side-by-side
+  if any? turtles in-radius interaction_range [ ; registers any turtles, including garbage, any citizens and buildings/locations
+    set turtles_in_range [who] of turtles in-radius interaction_range
+    foreach turtles_in_range [ x ->
+      ifelse member? x encounters_list [] [
+        set encounters_list lput x encounters_list
+        (ifelse                                 ; only agents of specific breed are recorded for pls-effect
+          [breed] of turtle x = citizens [set pls_individual pls_individual + pls_effect "pos" "small"]
+          [breed] of turtle x = garbagecollectors [set pls_individual pls_individual + pls_effect "pos" "small"]
+          [breed] of turtle x = policeofficers [
+            ifelse burglary_recent = 1 [
+              set pls_individual pls_individual + pls_effect "pos" "high"
+              set burglary_recent 0]
+            [set pls_individual pls_individual + pls_effect "pos" "medium"]
+          ]
+          [breed] of turtle x = communityworkers [set pls_individual pls_individual + pls_effect "pos" "medium"]
+        )
+      ]
+    ]
+    set encounters_list remove-duplicates encounters_list ; removes duplicate non-citizen agents
+    if min list [pls_individual] of self 100 = 100 [ set pls_individual 100 ]
+  ]
+end
+
+to crt_gcollectors [ number ] ; create extra garbagecollectors
+  create-garbagecollectors number [
+    setxy random-xcor random-ycor
+    set shape "person"
+    set size 12
+    set color orange
+    set pls_value pls_effect "pos" "small"
+    set homelocation patch-here ; records the home location of agent
+    if random 100 < 38 ; 37% have children
+      [ set children 1 + random-poisson 0.5
+        set target_school min-one-of schools [distance myself] ] ; choose nearest school !
+    if random 2 > 0 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
+      [set hasreligion 1
+      set target_religious min-one-of religious [distance myself]
+    ]
+    set target_supermarket min-one-of supermarkets [distance myself]
+  ]
+end
 @#$#@#$#@
 GRAPHICS-WINDOW
 218
@@ -1092,7 +1131,7 @@ INPUTBOX
 152
 603
 Lever_Citizens
-10.0
+275.0
 1
 0
 Number
@@ -1151,6 +1190,17 @@ Lever_PoliceOfficers
 1
 0
 Number
+
+MONITOR
+82
+139
+147
+184
+NIL
+treasury
+17
+1
+11
 
 @#$#@#$#@
 ## WHAT IS IT?
