@@ -409,7 +409,7 @@ to setup
       [ set children 1 + random-poisson 0.5 ]
     set hasreligion random 2 ; 50% have religion ; assuming that the randomizer equally often chooses 0 and 1
   ]
-    ;; create individual schedule for agent based on children, religion, job, initiatives
+  ;; create individual schedule for agent based on children, religion, job, initiatives
 
   ;;;;;; CREATE CITIZENS
   create-citizens Lever_Citizens [
@@ -745,7 +745,7 @@ ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
 if hournow = 0 and minutenow = 0[
   (ifelse
     pls_global < 25 and PBernoulli (1 / 7 ) [ ; low pls -> burglaries 1 per week
-      spawn_burglaries 1 
+      spawn_burglaries 1
     ]
     pls_global < 50 and PBernoulli (1 / 14 ) [; Medium-Low pls -> burglaries 1 per 2 week
       spawn_burglaries 1
@@ -758,6 +758,7 @@ if hournow = 0 and minutenow = 0[
     ]
   )
 ]
+
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;;  PROBLEMYOUTH
@@ -870,27 +871,6 @@ ask policeofficers [
     set target homelocation
     move-turtles
   ]
-]
-
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; ;;;  SETTING BURGLARIES ACCORDING TO PLS
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-
-if hournow = 0 and minutenow = 0[
-  (ifelse
-    pls_global < 25 and PBernoulli (1 / 7 ) [ ; low pls -> burglaries 1 per week
-      spawn_burglaries 1 
-    ]
-    pls_global < 50 and PBernoulli (1 / 14 ) [; Medium-Low pls -> burglaries 1 per 2 week
-      spawn_burglaries 1
-    ]
-    pls_global < 75 and PBernoulli (1 / 21 ) [ ; Medium-High pls -> burglaries 1 per 3 week
-        spawn_burglaries 1
-    ]
-    pls_global <= 100 and PBernoulli (1 / 30 ) [ ; high pls -> burglaries 1 per month
-          spawn_burglaries 1
-    ]
-  )
 ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
