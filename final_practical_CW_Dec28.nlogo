@@ -484,32 +484,6 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
 ask initiatives [
   ask citizens in-radius 3 [
       set QR_counter QR_counter + 1
-      ifelse pls_individual <= 92
-        [set pls_individual pls_individual + pls_pos_high]
-      [ifelse pls_individual = 93
-        [set pls_individual pls_individual + random-poisson  3.5]
-      [ifelse pls_individual = 94
-        [set pls_individual pls_individual + random-poisson 3]
-      [ifelse pls_individual = 95
-          [ set pls_individual pls_individual + pls_pos_medium]
-      [ifelse pls_individual = 96
-          [ set pls_individual pls_individual + random-poisson 2]
-      [ifelse pls_individual = 97
-         [ set pls_individual pls_individual + random-poisson 1.5]
-      [ifelse pls_individual = 98
-         [ set pls_individual pls_individual + random-poisson 1 ]
-      [ifelse pls_individual = 99
-        [ set pls_individual pls_individual + pls_pos_small ]
-      [if pls_individual = 100
-         [ set pls_individual pls_individual + 0 ]
-                    ]
-                  ]
-                ]
-              ]
-            ]
-          ]
-        ]
-      ]
    ]
 ]
 
