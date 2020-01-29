@@ -85,6 +85,8 @@ globals [
   ;;
   initiatives-counter ; initiatives counter
   prop_Initiatives ; proportion among maximum of initiatives
+
+  garbagefactor_2
 ]
 
 patches-own [
@@ -146,6 +148,7 @@ citizens-own [
   target_supermarket ; variable that determines the nearest supermarket from home
   target_school ; variable that determines the nearest school  from home
   target_religious ; variable that determines the nearest religious building from home
+  target_walk ; variable that determines the recreational walk in the neighborhood
   target_initiative ; variable that determines the nearest initiative from home
   schedule-counter ; variable for iterate on dayly schedule
   burglary_recent ; indicator if burglary recently occurred to citizen (0: No, 1:Yes)
@@ -205,7 +208,8 @@ initiatives-own[
   origin_time ; variable with the time of creation
   number_visits ; counter for the number of visits
   available ; initiative identifier 1:= selected , 0:= Available
-  counter_visits ; indicator if community worker visit the initiative
+  counter_visits ; indicator if community worker visitss the initiative
+  counter_visits_1; indicator if citizen visits the initiative
 ]
 
 schools-own[
@@ -419,7 +423,7 @@ to setup
   create-citizens Lever_Citizens [
     setxy random-xcor random-ycor
     set shape "person"
-    set size 4
+    set size 10;4
     set color grey
     set homelocation patch-here
     set pls_individual 50 ; max 100
@@ -473,14 +477,14 @@ set treasury 100 - 10 * Lever_PoliceOfficers - 5 * Lever_CommunityWorkers - 4 * 
 set pls_global round ((sum [pls_individual] of citizens) / count citizens) ; re-evaluates global PLS rating every
 
 set garbagefactor ((1 - pls_global / 100) * garbageprobability) ; evaluate garbagefactor in dependence of global pls-value. high pls -> low factor
-set burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate burglaryfactor in dependence of global pls-value. high pls -> low factor
+;set burglaryfactor ((1 - pls_global / 100) * burglaryprobability) ; evaluate burglaryfactor in dependence of global pls-value. high pls -> low factor
 ;;;;;; END PLS GLOBAL
 ;;;;;;;;;;;;;;;;;;;;;;
 
 ;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CREATE GARBAGE
 ;if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
-if (hournow mod 3 = 0) and minutenow = 0[
+if (hournow mod Lever_HourGarbage = 0) and minutenow = 0[
   spawn-random-garbage
 ]
 ;;;;;; END GARBAGE
@@ -524,13 +528,13 @@ ask initiatives [
    ]
 ]
 
-ask citizens with [QR_counter > 3][
-  set citizens_with_urge citizens_with_urge + 1
-  ]
+;ask citizens with [QR_counter > 3][
+ ; set citizens_with_urge citizens_with_urge + 1
+  ;]
 
     let difference Lever_Number_of_initiatives - count initiatives
-    let prob 1 - (pls_global / 100 )
-    if pls_global < 25 and PBernoulli prob and difference > 0 [
+    let prob (1 - (pls_global / 100 ))
+    if pls_global < 25 and PBernoulli prob and difference > 0 and treasury >= 2 [
     create-initiatives 1 [
       setxy random-xcor random-ycor
       set color blue
@@ -544,20 +548,33 @@ ask citizens with [QR_counter > 3][
     ]
   ]
 
+if hournow >= starttime and hournow <= endtime [
+      ask communityworkers [ask initiatives in-radius 3 [set counter_visits 1]]
+      ask citizens [ask initiatives in-radius 3 [set counter_visits_1 1 ]]
+]
+
 if hournow = 0 and minutenow = 0 [
   ask initiatives [
     set origin_time origin_time + 1
     if counter_visits > 0 [
       set number_visits number_visits + 1
     ]
+    if counter_visits_1 > 0 [
+      set number_visits number_visits + 0.5 ]
   ]
+  ask initiatives [
+      set counter_visits 0
+      set counter_visits_1 0
+    ]
 ]
 
-if hournow >= starttime and hournow <= endtime [
-      ask communityworkers [ask initiatives in-radius 3 [set counter_visits 1]]
-]
+ask initiatives [if origin_time = 90 and number_visits < 18  [die]]
 
-ask initiatives [if origin_time > 5 and number_visits = 0 [die]]
+ask initiatives [if hournow = 0 and minutenow = 0 and origin_time = 90
+  [
+    set origin_time 0
+    set number_visits 0]
+  ]
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;;;;; CITIZENS
@@ -571,6 +588,7 @@ ask citizens [
     set schedule-counter 0
     set target []
     set encounters_list []
+    set target_walk []
     ;;; on WORKDAYS
     if workday = 1 [
         if hasreligion > 0 and PBernoulli (1 / 7) [ ; assuming, religion is less important for children.
@@ -584,12 +602,18 @@ ask citizens [
         if hasjob = 1 [
           set schedule_start lput target_job schedule_start
         ]
+
       ]
     ;;; on WEEKENDS
     if workday = 0 [
       if hasreligion > 0 and PBernoulli (1 / 7) [
         set schedule_start fput target_religious schedule_start ; add religious building to schedule, first position
       ]
+
+    set target_walk one-of citizens
+    set schedule_start fput target_walk schedule_start ; add walk through neighboorhood after religious building to schedule
+
+
     ]
     ;;; on ANYDAY
     if PBernoulli (3 / 7) [
@@ -752,7 +776,6 @@ if hournow = starttime and minutenow = 0[
       set shape "face sad"
       set size 20
       set problemyouthlocation patch-here
-      show who
     ]
   ]
 ]
@@ -764,7 +787,7 @@ if hournow = endtime [
     ]
   ]
 
-if hournow > starttime and hournow < endtime and (hournow mod 3 = 0) and minutenow = 0 [ ; every three hours the problem youth generates litter
+if hournow > starttime and hournow < endtime and (hournow mod Lever_HourGarbage = 0) and minutenow = 0 [ ; every three hours the problem youth generates litter
   spawn-probYouth-garbage ;; only creates garbage with problemyouth = 2
 ]
 
@@ -952,7 +975,7 @@ ask garbagecollectors [
     ]
   ]
 ;;;;;; END GARBAGECOLLECTORS
-
+if weeknow = 52 and daynow = 7 and hournow = 23 and minutenow = 0 [stop]
 timestep
 
 end
@@ -983,7 +1006,8 @@ to timestep
 end
 
 to spawn-random-garbage
-  let new_garbage_amount round (abs (random-normal 1 (1 / garbagefactor)))  ; the garbageprobability-factor determines the standard deviation (SD)
+  ifelse garbagefactor = 0 [set garbagefactor_2 0.01][set garbagefactor_2 garbagefactor]
+  let new_garbage_amount round (abs (random-normal 1 1 / garbagefactor_2))  ; the garbageprobability-factor determines the standard deviation (SD)
                                 ; of garbage creation. if pls is high (ex.90) -> factor is low (0.1), thus the SD is low SD: 1.
                                 ; with a random-normal distribution with mean=1, this results in garbage production of 0 and 2 at high pls
                                 ; and between 0 and 11 at low pls.
@@ -1242,7 +1266,7 @@ citizen_speed
 citizen_speed
 0
 100
-44.0
+35.0
 1
 1
 NIL
@@ -1257,7 +1281,7 @@ minute_step
 minute_step
 0
 59
-45.0
+15.0
 0.5
 1
 NIL
@@ -1283,7 +1307,7 @@ distance_target
 distance_target
 0
 100
-60.0
+40.0
 1
 1
 NIL
@@ -1361,7 +1385,7 @@ INPUTBOX
 143
 479
 Lever_PoliceOfficers
-3.0
+2.0
 1
 0
 Number
@@ -1383,7 +1407,7 @@ INPUTBOX
 151
 665
 Lever_GarbageCollectors
-4.0
+5.0
 1
 0
 Number
@@ -1445,6 +1469,17 @@ false
 "" ""
 PENS
 "default" 1.0 0 -16777216 true "" "plot count garbage"
+
+INPUTBOX
+9
+749
+158
+809
+Lever_HourGarbage
+3.0
+1
+0
+Number
 
 @#$#@#$#@
 ## WHAT IS IT?
@@ -1792,6 +1827,51 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 @#$#@#$#@
+<experiments>
+  <experiment name="Experiment_1" repetitions="2" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>pls_global</metric>
+    <metric>count initiatives</metric>
+    <metric>treasury</metric>
+    <metric>count garbage</metric>
+    <metric>count burglaries</metric>
+    <enumeratedValueSet variable="Lever_Citizens">
+      <value value="270"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_PoliceOfficers">
+      <value value="2"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_Number_of_initiatives">
+      <value value="8"/>
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_CommunityWorkers">
+      <value value="2"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_GarbageCollectors">
+      <value value="2"/>
+      <value value="4"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="minute_step">
+      <value value="30"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="debug?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="citizen_speed">
+      <value value="40"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="distance_target">
+      <value value="50"/>
+    </enumeratedValueSet>
+  </experiment>
+</experiments>
 @#$#@#$#@
 @#$#@#$#@
 default
