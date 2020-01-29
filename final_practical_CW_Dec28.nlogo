@@ -46,9 +46,6 @@ globals [
   ;; PLS global counter
   pls_global ; max 100
 
-  initiative_pressure
-  alternative_target_list
-
   ;; event factors
   garbageprobability
   garbagefactor
@@ -58,6 +55,11 @@ globals [
   visibility_range ; variable to set when objects in range to be noticed by agents
   interaction_range ; sets range when citizens are able to interact
   qr_locations
+  initiative_pressure
+  ini_pressure_level
+  ini_pressure_day
+  ini_pressure_week
+  alternative_target_list
 
   ;; state finances
   treasury ; 100-#police*10-#communityworker*5-#garbagecollector*4-#initiatives*2 , limit 0
@@ -147,7 +149,6 @@ citizens-own [
   schedule-counter ; variable for iterate on dayly schedule
   burglary_recent ; indicator if burglary recently occurred to citizen
   burglary_date ; indicates when burglary occurred to citizen
-  urge_to_start_initiative ; indicates urge to start an initiative
   encounters_list ; registers encounters during one day
   turtles_in_range ; recognizes other turtles in range to help setting pls_individual values
   burglary_condition  ; variable that save if a burglary for this citizen happen (0: No, 1:Yes)
@@ -418,8 +419,6 @@ to setup
     set pls_individual 50 ; max 100
     set turtles_in_range []
     set encounters_list []
-    set burglary_recent 0 ; indicator if burglary recently occurred to citizen
-    set urge_to_start_initiative 0 ; indicates urge to start an initiative
     set target_supermarket min-one-of supermarkets [distance myself] ; assign favorite(primary) supermarket
     if random 100 < 38 ; 37% have children
       [ set children 1 + random-poisson 0.5
@@ -475,62 +474,60 @@ if minutenow > ( 30 - minute_step) and minutenow < (30 + minute_step) [
 ;;;;;; END GARBAGE
 ;;;;;;;;;;;;;;;;;;;;;;
 
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;;;;; MUNICIPALITY POLICIES
-;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;;; POLICIES GARBAGECOLLECTORS
-; based on PLS municipality orders more garbage collectors when pls is low or less g-collectors when pls is high
-if hournow + minutenow = 0 [
-  if pls_global < 50 and count garbagecollectors < 11 [
-    (ifelse
-    pls_global > 40 and treasury > 3 [crt_gcollectors 1]
-    pls_global > 30 and treasury > 7 [crt_gcollectors 2]
-    pls_global > 20 and treasury > 11 [crt_gcollectors 3]
-    pls_global > 10 and treasury > 15 [crt_gcollectors 4]
-    pls_global > 0 and treasury > 19 [crt_gcollectors 5]
-    )
-  ]
-  if pls_global > 50 and count garbagecollectors > 2 [
-    (ifelse
-    pls_global < 60 [ask one-of garbagecollectors [die]]
-    pls_global < 70 [ask n-of 2 garbagecollectors [die]]
-    pls_global < 80 [ask n-of 3 garbagecollectors [die]]
-    pls_global < 90 [ask n-of 4 garbagecollectors [die]]
-    pls_global < 100 [ask n-of 5 garbagecollectors [die]]
-    )
-  ]
-]
-;;; POL. POLICEOFFICERS
-;;; POL. COMMUNITYWORKERS
-;;; POL. INITIATIVES (max. number of supported initiatives)
-
-
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
-;QR code increments when near the initiatives
+;;;;;; QR code increments when near the initiatives
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ask initiatives [
   ask citizens in-radius 3 [
       set QR_counter QR_counter + 1
    ]
 ]
-
 ask citizens with [QR_counter > 3][
-  set citizens_with_urge citizens_with_urge + 1
+  set citizens_with_urge 1
   ]
-ask citizens [
-  if citizens_with_urge > 0.5 * Lever_Citizens [
-    hatch-initiatives 1 [
-      setxy random-xcor random-ycor
-      set color blue
-      set shape "tree"
-      set size 15
-      set initiativeslocation patch-here
-      set origin_time 0
-      set label who
-      set label-color black
-    ]
+
+;;;;;; ini_pressure-logic:
+;; there are ini_pressure_day and -week to record the starting date of high initiative_pressure
+;; and there is ini_pressure_level to record the ongoing initiative_pressure, like a tank that fills if citizens are willing.
+;; each day counts towards ini_pressure_level. 10 days of high pressure are needed to "fill the tank" and create initiatives.
+;; however, the tank is leaky: if one day passes without high initiative_pressure, the total ini-pressure level gets reduced.
+;; after successful initiative-creation, the ini_pressure_level-counter gets a penalty of 5 points (=50%) in order to
+;; prevent rapid initiative creation.
+
+set initiative_pressure [ ; the initiative_pressure = the number of citizens with an urge to create initiatives
+                          ; the pressure gets a boost at low pls_global levels calibrated to:
+                          ; penalty between 0 and 10% at pls>50 / 0-boost at pls=50 / factor 1.8 boost at pls=10
+                          ; and up to factor 10.8 boost at pls<= 1
+                          ; effect of the boost: allows a lower number of citizens to reach the threshold to create new initiatives
+                          ; i.e. speeds up the process but does not create more initiatives at the same time.
+  ifelse pls_global >= 1 [
+    count citizens with [citizens_with_urge = 1] * ( 0.8 + 10 / pls_global )
+  ] [ count citizens with [citizens_with_urge = 1] * ( 0.8 + 10 / 1 ) ]
+]
+
+if initiative_pressure > 0.5 * Lever_Citizens [ ; the threshold is 50% of the population. at low pls_global, this threshold can be
+                                                ; filled with less than 50% of the citizens. at pls_global > 50, the threshold receives
+                                                ; a penalty and is harder to fill. (see above)
+  ifelse ini_pressure_date = 0 [
+ ;   set ini_pressure_date (show (map [ [a b] -> (weeknow - a) * 7 + daynow - b] [1 2]))
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;; <<<<<< CONTINUE HERE >>>>>> ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+  ]
+  let tmp_start_week weeknow
+  let tmp_start_day daynow
+  let tmp_pressure_counter 0
+
+  hatch-initiatives 1 [
+    setxy random-xcor random-ycor
+    set color blue
+    set shape "tree"
+    set size 15
+    set initiativeslocation patch-here
+    set origin_time 0
+    set label who
+    set label-color black
   ]
 ]
+
 if hournow = 0 and minutenow = 0 [
   ask initiatives [
     set origin_time origin_time + 1
@@ -817,7 +814,7 @@ ask policeofficers [
 if hournow = 0 and minutenow = 0[
   (ifelse
     pls_global < 25 and PBernoulli (1 / 7 ) [ ; low pls -> burglaries 1 per week
-      spawn_burglaries 1 
+      spawn_burglaries 1
     ]
     pls_global < 50 and PBernoulli (1 / 14 ) [; Medium-Low pls -> burglaries 1 per 2 week
       spawn_burglaries 1
