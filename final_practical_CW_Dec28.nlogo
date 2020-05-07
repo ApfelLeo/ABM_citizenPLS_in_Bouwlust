@@ -975,7 +975,7 @@ ask garbagecollectors [
     ]
   ]
 ;;;;;; END GARBAGECOLLECTORS
-if weeknow = 52 and daynow = 7 and hournow = 23 and minutenow = 0 [stop]
+if yearnow = 3 and weeknow = 1 and daynow = 1 and hournow = 0 and minutenow = 0 [stop]
 timestep
 
 end
@@ -1385,7 +1385,7 @@ INPUTBOX
 143
 479
 Lever_PoliceOfficers
-2.0
+4.0
 1
 0
 Number
@@ -1828,7 +1828,7 @@ NetLogo 6.1.1
 @#$#@#$#@
 @#$#@#$#@
 <experiments>
-  <experiment name="Experiment_1" repetitions="2" runMetricsEveryStep="true">
+  <experiment name="pol4_s230_min10_d280" repetitions="3" runMetricsEveryStep="true">
     <setup>setup</setup>
     <go>go</go>
     <metric>pls_global</metric>
@@ -1836,14 +1836,16 @@ NetLogo 6.1.1
     <metric>treasury</metric>
     <metric>count garbage</metric>
     <metric>count burglaries</metric>
+    <metric>yearnow</metric>
+    <metric>weeknow</metric>
+    <metric>daynow</metric>
     <enumeratedValueSet variable="Lever_Citizens">
       <value value="270"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="Lever_PoliceOfficers">
-      <value value="2"/>
+      <value value="4"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="Lever_Number_of_initiatives">
-      <value value="8"/>
       <value value="10"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="Lever_CommunityWorkers">
@@ -1856,19 +1858,67 @@ NetLogo 6.1.1
       <value value="5"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="minute_step">
-      <value value="30"/>
+      <value value="10"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="debug?">
       <value value="true"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="citizen_speed">
-      <value value="40"/>
+      <value value="230"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="verbose?">
       <value value="true"/>
     </enumeratedValueSet>
     <enumeratedValueSet variable="distance_target">
-      <value value="50"/>
+      <value value="280"/>
+    </enumeratedValueSet>
+  </experiment>
+  <experiment name="pol4_3reps_s35_min15_d40" repetitions="3" runMetricsEveryStep="true">
+    <setup>setup</setup>
+    <go>go</go>
+    <metric>pls_global</metric>
+    <metric>count initiatives</metric>
+    <metric>treasury</metric>
+    <metric>count garbage</metric>
+    <metric>count burglaries</metric>
+    <metric>yearnow</metric>
+    <metric>weeknow</metric>
+    <metric>daynow</metric>
+    <enumeratedValueSet variable="Lever_Citizens">
+      <value value="270"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_PoliceOfficers">
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_Number_of_initiatives">
+      <value value="10"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_GarbageCollectors">
+      <value value="2"/>
+      <value value="4"/>
+      <value value="5"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_CommunityWorkers">
+      <value value="2"/>
+      <value value="4"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="minute_step">
+      <value value="15"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="citizen_speed">
+      <value value="35"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="debug?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="verbose?">
+      <value value="true"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="distance_target">
+      <value value="40"/>
+    </enumeratedValueSet>
+    <enumeratedValueSet variable="Lever_HourGarbage">
+      <value value="3"/>
     </enumeratedValueSet>
   </experiment>
 </experiments>
